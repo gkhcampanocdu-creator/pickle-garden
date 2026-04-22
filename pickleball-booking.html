@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pickle Garden</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --g:#3ecf6a;--gd:#28a852;--gx:#c8f7d8;--gh:#1a7a3a;
+  --bg:#0a1410;--card:#111e16;--card2:#182a1e;--card3:#1e3326;
+  --border:rgba(62,207,106,.13);--border2:rgba(62,207,106,.28);--border3:rgba(62,207,106,.45);
+  --text:#e8f5ec;--muted:#7aad8c;--dim:#3d6b4f;--dimmer:#2a4a38;
+  --booked-bg:rgba(204,68,68,.1);--booked-t:#e07070;--booked-b:rgba(204,68,68,.28);
+  --r:14px;--shadow:0 24px 64px rgba(0,0,0,.55);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:0 0 100px;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;
+  background:linear-gradient(rgba(62,207,106,.05) 1px,transparent 1px),
+             linear-gradient(90deg,rgba(62,207,106,.05) 1px,transparent 1px);
+  background-size:56px 56px;z-index:0;}
+body::after{content:'';position:fixed;top:-180px;left:50%;transform:translateX(-50%);
+  width:900px;height:700px;pointer-events:none;
+  background:radial-gradient(ellipse,rgba(62,207,106,.08) 0%,transparent 60%);z-index:0;}
+.wrap{position:relative;z-index:1;max-width:880px;margin:0 auto;padding:0 20px;}
+
+/* hero */
+.hero{text-align:center;padding:56px 0 32px;}
+.badge{display:inline-flex;align-items:center;gap:8px;
+  background:rgba(62,207,106,.1);border:1px solid var(--border2);
+  color:var(--g);font-size:.72rem;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;padding:6px 16px;border-radius:999px;margin-bottom:22px;}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--g);
+  box-shadow:0 0 10px var(--g);animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.65)}}
+h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.8rem,9vw,5.2rem);letter-spacing:.03em;line-height:.95;}
+h1 span{color:var(--g);text-shadow:0 0 40px rgba(62,207,106,.3);}
+.hero-sub{color:var(--muted);margin-top:14px;font-size:.93rem;line-height:1.7;max-width:480px;margin-left:auto;margin-right:auto;}
+
+/* amenities strip */
+.amenities{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:24px 0 36px;}
+.am{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);
+  border-radius:999px;padding:7px 16px;font-size:.78rem;font-weight:500;color:var(--muted);}
+.am-icon{font-size:.95rem;}
+
+/* steps */
+.steps-wrap{display:flex;justify-content:center;margin:0 0 28px;}
+.steps{display:flex;align-items:center;gap:0;}
+.step{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;color:var(--dim);transition:color .3s;padding:0 6px;}
+.step.active{color:var(--g);}
+.step.done{color:var(--gd);}
+.step-n{width:26px;height:26px;border-radius:50%;background:var(--card2);border:1.5px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:.72rem;transition:all .3s;flex-shrink:0;}
+.step.active .step-n{background:var(--g);border-color:var(--g);color:#061009;font-weight:700;box-shadow:0 0 14px rgba(62,207,106,.4);}
+.step.done .step-n{background:var(--gd);border-color:var(--gd);color:#061009;font-weight:700;}
+.step-line{width:36px;height:1.5px;background:var(--border);flex-shrink:0;transition:background .3s;}
+.step-line.done{background:var(--gd);}
+
+/* card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:18px;
+  padding:30px 30px 34px;box-shadow:var(--shadow);animation:fadeUp .3s ease both;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.18rem;letter-spacing:.07em;
+  color:var(--text);margin-bottom:18px;display:flex;align-items:center;gap:9px;}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--g);box-shadow:0 0 10px var(--g);flex-shrink:0;}
+hr{border:none;border-top:1px solid var(--border);margin:28px 0;}
+
+/* calendar */
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.cal-month{font-family:'Bebas Neue',sans-serif;font-size:1.45rem;letter-spacing:.05em;}
+.cal-nav{background:var(--card2);border:1px solid var(--border);color:var(--text);width:36px;height:36px;
+  border-radius:9px;cursor:pointer;font-size:1rem;transition:all .18s;display:flex;align-items:center;justify-content:center;}
+.cal-nav:hover{background:var(--card3);border-color:var(--border2);color:var(--g);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cal-dow{text-align:center;font-size:.67rem;font-weight:600;letter-spacing:.1em;color:var(--dim);padding-bottom:8px;}
+.cal-day{aspect-ratio:1;border-radius:9px;border:1px solid transparent;display:flex;align-items:center;
+  justify-content:center;font-size:.85rem;cursor:pointer;transition:all .18s;position:relative;}
+.cal-day.empty,.cal-day.past{cursor:default;}
+.cal-day.past{color:var(--dimmer);opacity:.4;}
+.cal-day.available:hover{background:rgba(62,207,106,.1);border-color:var(--border2);}
+.cal-day.selected{background:var(--g);color:#061009;font-weight:700;box-shadow:0 4px 16px rgba(62,207,106,.4);}
+.cal-day.has-bookings::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);
+  width:4px;height:4px;border-radius:50%;background:var(--booked-t);}
+.cal-day.has-bookings.selected::after{background:rgba(6,16,9,.5);}
+.cal-day.full{color:var(--booked-t);opacity:.5;cursor:not-allowed;}
+
+/* duration */
+.dur-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+.dur-btn{background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:11px;
+  padding:14px 6px;text-align:center;cursor:pointer;transition:all .18s;
+  font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:500;}
+.dur-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card3);}
+.dur-btn.active{background:rgba(62,207,106,.12);border-color:var(--g);color:var(--g);font-weight:700;
+  box-shadow:0 0 0 3px rgba(62,207,106,.08);}
+.dur-num{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;line-height:1;letter-spacing:.03em;}
+.dur-label{font-size:.67rem;color:var(--dim);margin-top:3px;letter-spacing:.04em;text-transform:uppercase;}
+.dur-btn.active .dur-label{color:var(--gd);}
+
+/* time slots */
+.refresh-bar{display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--muted);margin-bottom:14px;}
+.rspin{width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--g);
+  border-radius:50%;animation:spin .8s linear infinite;display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.last-upd{margin-left:auto;font-size:.7rem;color:var(--dim);}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;display:none;}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--muted);}
+.leg-dot{width:10px;height:10px;border-radius:3px;}
+.ld-a{background:rgba(62,207,106,.15);border:1px solid var(--border2);}
+.ld-b{background:var(--booked-bg);border:1px solid var(--booked-b);}
+.ld-s{background:var(--g);}
+.ld-sc{background:rgba(62,207,106,.22);border:1px solid var(--g);}
+.ld-bl{background:rgba(62,207,106,.04);border:1px dashed var(--dim);}
+.time-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:7px;}
+.ts{border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer;transition:all .18s;
+  font-size:.8rem;font-weight:500;user-select:none;}
+.ts-time{display:block;font-weight:600;}
+.ts-tag{display:block;font-size:.62rem;margin-top:3px;opacity:.8;}
+.ts.av{background:rgba(62,207,106,.07);border:1px solid var(--border);color:var(--text);}
+.ts.av:hover{background:rgba(62,207,106,.16);border-color:var(--border2);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.3);}
+.ts.sel{background:var(--g);border:1px solid var(--g);color:#061009;font-weight:700;box-shadow:0 4px 16px rgba(62,207,106,.35);}
+.ts.sel-c{background:rgba(62,207,106,.2);border:1px solid var(--g);color:var(--g);font-weight:600;}
+.ts.bk{background:var(--booked-bg);border:1px solid var(--booked-b);color:var(--booked-t);cursor:not-allowed;opacity:.7;}
+.ts.bl{background:rgba(62,207,106,.02);border:1px dashed rgba(62,207,106,.12);color:var(--dim);cursor:not-allowed;opacity:.5;}
+.ph{text-align:center;padding:40px;color:var(--dim);font-size:.9rem;
+  background:rgba(62,207,106,.03);border:1px dashed var(--border);border-radius:12px;}
+.ph-icon{font-size:2rem;margin-bottom:10px;display:block;opacity:.5;}
+
+/* form */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.field{margin-bottom:18px;}
+label{display:block;font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.input-wrap{position:relative;}
+.input-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:1rem;pointer-events:none;opacity:.5;}
+input{width:100%;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:.95rem;padding:12px 14px;outline:none;
+  transition:border-color .2s,box-shadow .2s,background .2s;}
+input.has-icon{padding-left:40px;}
+input::placeholder{color:var(--dim);}
+input:focus{border-color:var(--g);box-shadow:0 0 0 3px rgba(62,207,106,.1);background:var(--card3);}
+input.err{border-color:#e07070;box-shadow:0 0 0 3px rgba(204,68,68,.1);}
+.field-err{font-size:.73rem;color:#e07070;margin-top:5px;display:none;}
+
+/* summary */
+.sum{background:var(--card2);border:1px solid var(--border2);border-radius:12px;padding:18px 20px;font-size:.88rem;line-height:2;}
+.sum-title{font-weight:600;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.sum-row{display:flex;justify-content:space-between;align-items:center;}
+.sum-row span{color:var(--muted);}
+.sum-row strong{color:var(--text);font-weight:600;}
+
+/* confirm */
+.confirm-box{background:linear-gradient(135deg,rgba(62,207,106,.07),rgba(62,207,106,.03));
+  border:1px solid var(--border2);border-radius:14px;padding:22px 22px;font-size:.9rem;line-height:2.1;}
+.confirm-box .sum-row strong{color:var(--g);}
+
+/* buttons */
+.btn{width:100%;background:linear-gradient(135deg,var(--g),var(--gd));color:#061009;
+  font-family:'Bebas Neue',sans-serif;font-size:1.22rem;letter-spacing:.1em;border:none;border-radius:11px;
+  padding:16px;cursor:pointer;transition:all .2s;box-shadow:0 4px 24px rgba(62,207,106,.3);
+  display:flex;align-items:center;justify-content:center;gap:10px;}
+.btn:hover{background:linear-gradient(135deg,#50e07a,var(--g));box-shadow:0 6px 32px rgba(62,207,106,.45);transform:translateY(-1px);}
+.btn:active{transform:scale(.98);box-shadow:0 2px 12px rgba(62,207,106,.25);}
+.btn:disabled{opacity:.38;cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-row{margin-top:26px;display:flex;gap:10px;}
+.btn-outline{background:transparent;color:var(--g);border:1.5px solid var(--border2);
+  font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:.08em;border-radius:11px;
+  padding:13px 22px;cursor:pointer;transition:all .2s;flex-shrink:0;}
+.btn-outline:hover{background:rgba(62,207,106,.09);border-color:var(--g);}
+.spin{width:18px;height:18px;border:2.5px solid rgba(6,16,9,.35);border-top-color:#061009;
+  border-radius:50%;animation:spin .7s linear infinite;display:none;}
+
+/* toast */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);
+  color:#fff;font-weight:600;font-size:.87rem;padding:14px 28px;border-radius:999px;
+  box-shadow:0 8px 36px rgba(0,0,0,.55);z-index:999;transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s;
+  opacity:0;white-space:nowrap;pointer-events:none;}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.toast.success{background:var(--gd);}
+.toast.error{background:#b83232;}
+
+/* success */
+.success-wrap{text-align:center;padding:14px 0 8px;}
+.success-icon{width:72px;height:72px;border-radius:50%;
+  background:radial-gradient(circle,rgba(62,207,106,.2),rgba(62,207,106,.05));
+  border:2px solid var(--g);display:flex;align-items:center;justify-content:center;
+  font-size:2.1rem;margin:0 auto 22px;box-shadow:0 0 32px rgba(62,207,106,.25);
+  animation:popIn .55s cubic-bezier(.34,1.56,.64,1);}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.success-wrap h2{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--g);
+  margin-bottom:8px;letter-spacing:.05em;text-shadow:0 0 30px rgba(62,207,106,.3);}
+.success-wrap p{color:var(--muted);margin-bottom:20px;line-height:1.65;font-size:.92rem;}
+.booking-ref-label{font-family:'DM Sans',sans-serif;font-size:.68rem;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:6px;}
+.booking-ref{display:inline-flex;align-items:center;gap:8px;background:rgba(62,207,106,.1);
+  border:1px solid var(--border2);border-radius:8px;padding:9px 22px;
+  font-family:'Bebas Neue',sans-serif;letter-spacing:.14em;color:var(--g);font-size:1.2rem;margin-bottom:22px;}
+
+/* court info footer */
+.court-info{margin-top:28px;padding:22px 24px;background:var(--card);
+  border:1px solid var(--border);border-radius:16px;}
+.info-title{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:.1em;
+  color:var(--muted);margin-bottom:14px;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.info-item{display:flex;align-items:flex-start;gap:9px;font-size:.82rem;line-height:1.5;}
+.info-item-icon{font-size:1.05rem;margin-top:1px;flex-shrink:0;}
+.info-item-text{color:var(--muted);}
+.info-item-text strong{display:block;color:var(--text);font-weight:600;font-size:.8rem;}
+
+@media(max-width:560px){
+  .card{padding:20px 18px 26px;}
+  .two-col{grid-template-columns:1fr;}
+  .dur-grid{grid-template-columns:repeat(4,1fr);}
+  .time-grid{grid-template-columns:repeat(3,1fr);}
+  .amenities{gap:7px;}
+  .am{font-size:.73rem;padding:6px 12px;}
+  .info-grid{grid-template-columns:1fr;}
+  .step-line{width:22px;}
+  .step .step-label{display:none;}
+}
+
+/* gcash payment */
+.gcash-wrap{background:var(--card2);border:1px solid var(--border2);border-radius:12px;padding:22px 20px;text-align:center;margin-top:4px;}
+.gcash-brand{font-size:1.9rem;font-weight:800;letter-spacing:-.01em;margin-bottom:16px;line-height:1;}
+.gcash-brand .g-blue{color:#00aeef;}
+.gcash-qr-frame{width:154px;height:154px;margin:0 auto 14px;border-radius:10px;
+  background:rgba(255,255,255,.04);border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;position:relative;}
+.qr-corner{position:absolute;width:26px;height:26px;border-color:var(--g);border-style:solid;}
+.qr-tl{top:8px;left:8px;border-width:3px 0 0 3px;border-top-left-radius:4px;}
+.qr-tr{top:8px;right:8px;border-width:3px 3px 0 0;border-top-right-radius:4px;}
+.qr-bl{bottom:8px;left:8px;border-width:0 0 3px 3px;border-bottom-left-radius:4px;}
+.qr-br{bottom:8px;right:8px;border-width:0 3px 3px 0;border-bottom-right-radius:4px;}
+.gcash-qr-label{font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);}
+.gcash-note{font-size:.78rem;color:var(--muted);line-height:1.7;margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Hero -->
+<div class="hero">
+  <div class="badge"><div class="pulse"></div> Live Availability</div>
+  <h1>PICKLE<br><span>GARDEN</span></h1>
+  <p class="hero-sub">Pick a date, choose your duration, and grab a slot instantly. No double-bookings — availability updates in real time.</p>
+</div>
+
+
+<!-- Step Indicator -->
+<div class="steps-wrap">
+  <div class="steps">
+    <div class="step active" id="stp-1"><div class="step-n">1</div><span class="step-label">&nbsp;Date &amp; Time</span></div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step" id="stp-2"><div class="step-n">2</div><span class="step-label">&nbsp;Your Info</span></div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step" id="stp-3"><div class="step-n">3</div><span class="step-label">&nbsp;Confirm</span></div>
+  </div>
+</div>
+
+<!-- STEP 1 -->
+<div id="v1">
+<div class="card">
+  <div class="section-title"><div class="dot"></div> Select a Date</div>
+  <div class="cal-header">
+    <button class="cal-nav" id="prevM">&#8592;</button>
+    <div class="cal-month" id="calM"></div>
+    <button class="cal-nav" id="nextM">&#8594;</button>
+  </div>
+  <div class="cal-grid" id="calG"></div>
+  <hr/>
+  <div class="section-title"><div class="dot"></div> Booking Duration</div>
+  <div class="dur-grid">
+    <div class="dur-btn active" data-d="1"><div class="dur-num">1</div><div class="dur-label">hour</div></div>
+    <div class="dur-btn" data-d="2"><div class="dur-num">2</div><div class="dur-label">hours</div></div>
+    <div class="dur-btn" data-d="3"><div class="dur-num">3</div><div class="dur-label">hours</div></div>
+    <div class="dur-btn" data-d="4"><div class="dur-num">4</div><div class="dur-label">hours</div></div>
+  </div>
+  <hr/>
+  <div class="section-title"><div class="dot"></div> Choose a Time Slot</div>
+  <div class="refresh-bar">
+    <div class="rspin" id="rSpin"></div>
+    <span id="rStatus">Pick a date to view availability</span>
+    <span class="last-upd" id="rUpd"></span>
+  </div>
+  <div class="legend" id="legend">
+    <div class="leg-item"><div class="leg-dot ld-a"></div>Available</div>
+    <div class="leg-item"><div class="leg-dot ld-s"></div>Start</div>
+    <div class="leg-item"><div class="leg-dot ld-sc"></div>Your range</div>
+    <div class="leg-item"><div class="leg-dot ld-b"></div>Booked</div>
+    <div class="leg-item"><div class="leg-dot ld-bl"></div>Blocked</div>
+  </div>
+  <div id="timeC">
+    <div class="ph"><span class="ph-icon">📅</span>Pick a date above to see available slots</div>
+  </div>
+  <div class="btn-row"><button class="btn" id="btnN1" disabled>Continue &rsaquo;</button></div>
+</div>
+</div>
+
+<!-- STEP 2 -->
+<div id="v2" style="display:none">
+<div class="card">
+  <div class="section-title"><div class="dot"></div> Your Details</div>
+  <div class="two-col">
+    <div class="field">
+      <label>First Name</label>
+      <div class="input-wrap"><span class="input-icon">👤</span><input id="fname" class="has-icon" placeholder="Maria" required/></div>
+      <div class="field-err" id="err-fname">Required</div>
+    </div>
+    <div class="field">
+      <label>Last Name</label>
+      <input id="lname" placeholder="Santos" required/>
+      <div class="field-err" id="err-lname">Required</div>
+    </div>
+  </div>
+  <div class="field">
+    <label>Phone Number</label>
+    <div class="input-wrap"><span class="input-icon">📞</span><input id="phone" class="has-icon" type="tel" placeholder="09171234567" required/></div>
+    <div class="field-err" id="err-phone">Must be 11 digits starting with 09</div>
+  </div>
+  <div class="field">
+    <label>Email <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:.85em">(optional)</span></label>
+    <div class="input-wrap"><span class="input-icon">✉️</span><input id="email" class="has-icon" type="email" placeholder="maria@example.com"/></div>
+  </div>
+  <hr/>
+  <div class="section-title"><div class="dot"></div> Booking Summary</div>
+  <div class="sum">
+    <div class="sum-row"><span>📅 Date</span><strong id="s-date">—</strong></div>
+    <div class="sum-row"><span>🕐 Time</span><strong id="s-time">—</strong></div>
+    <div class="sum-row"><span>⏱ Duration</span><strong id="s-dur">—</strong></div>
+    <div class="sum-row"><span>💰 Total</span><strong id="s-price" style="color:var(--g);font-size:1rem">—</strong></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn-outline" id="btnB2">&#8592; Back</button>
+    <button class="btn" id="btnN2" style="flex:1">Review &amp; Confirm &rsaquo;</button>
+  </div>
+</div>
+</div>
+
+<!-- STEP 3 -->
+<div id="v3" style="display:none">
+<div class="card">
+  <div class="section-title"><div class="dot"></div> Confirm Your Booking</div>
+  <div class="confirm-box">
+    <div class="sum-title">Review before confirming</div>
+    <div class="sum-row"><span>👤 Name</span><strong id="c-name">—</strong></div>
+    <div class="sum-row"><span>📞 Phone</span><strong id="c-phone">—</strong></div>
+    <div class="sum-row"><span>📅 Date</span><strong id="c-date">—</strong></div>
+    <div class="sum-row"><span>🕐 Time</span><strong id="c-time">—</strong></div>
+    <div class="sum-row"><span>⏱ Duration</span><strong id="c-dur">—</strong></div>
+    <div class="sum-row"><span>💰 Total</span><strong id="c-price">—</strong></div>
+  </div>
+  <hr/>
+  <div class="section-title"><div class="dot"></div> GCash Payment</div>
+  <div class="gcash-wrap">
+    <div class="gcash-brand"><span class="g-blue">G</span>Cash</div>
+    <div class="gcash-qr-frame">
+      <div class="qr-corner qr-tl"></div>
+      <div class="qr-corner qr-tr"></div>
+      <div class="qr-corner qr-bl"></div>
+      <div class="qr-corner qr-br"></div>
+      <span class="gcash-qr-label">Scan to Pay</span>
+    </div>
+    <p class="gcash-note">Open GCash → Pay QR → Scan this code.<br>Save your 13-digit reference number.</p>
+  </div>
+  <div class="field" style="margin-top:18px;margin-bottom:0">
+    <label>GCash Reference Number</label>
+    <div class="input-wrap"><span class="input-icon">🧾</span><input id="gcashRef" class="has-icon" placeholder="13-digit number" maxlength="13" inputmode="numeric"/></div>
+    <div class="field-err" id="err-gcashRef">Must be exactly 13 numeric digits</div>
+  </div>
+  <div class="btn-row" style="margin-top:26px">
+    <button class="btn-outline" id="btnB3">&#8592; Back</button>
+    <button class="btn" id="btnSub" style="flex:1">
+      <span id="subTxt">Confirm Booking</span>
+      <div class="spin" id="subSpin"></div>
+    </button>
+  </div>
+</div>
+</div>
+
+<!-- SUCCESS -->
+<div id="vOK" style="display:none">
+<div class="card">
+  <div class="success-wrap">
+    <div class="success-icon">🏓</div>
+    <h2>Court Booked!</h2>
+    <p>Your reservation is confirmed.<br>See you on the court!</p>
+    <div class="booking-ref-label">Booking Reference</div>
+    <div class="booking-ref" id="ok-ref">#—</div>
+    <div class="sum" style="text-align:left;margin-bottom:26px;font-size:.88rem;line-height:1.9">
+      <div class="sum-row"><span>📅 Date</span><strong id="ok-date">—</strong></div>
+      <div class="sum-row"><span>🕐 Time</span><strong id="ok-time">—</strong></div>
+      <div class="sum-row"><span>⏱ Duration</span><strong id="ok-dur">—</strong></div>
+    </div>
+    <button class="btn-outline" id="btnNew" style="padding:13px 36px">+ Book Another Slot</button>
+  </div>
+</div>
+</div>
+
+<!-- Court Info -->
+<div class="court-info" id="courtInfo">
+  <div class="info-title">Court Information</div>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="info-item-icon">📍</span>
+      <div class="info-item-text"><strong>Location</strong>768 Plaridel Street, Cambaro Mandaue City</div>
+    </div>
+    <div class="info-item">
+      <span class="info-item-icon">🕗</span>
+      <div class="info-item-text"><strong>Operating Hours</strong>8:00 AM – 10:00 PM Daily</div>
+    </div>
+    <div class="info-item">
+      <span class="info-item-icon">📱</span>
+      <div class="info-item-text"><strong>Contact</strong>09218132196</div>
+    </div>
+    <div class="info-item">
+      <span class="info-item-icon">⚠️</span>
+      <div class="info-item-text"><strong>Policy</strong>Cancel 2hrs before. No-shows forfeit slot.</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+<div class="toast" id="toast"></div>
+
+<script>
+// CONFIG — your Google Apps Script URL
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzouIcvMYRC95KqzSneWG2xL4QdtxcdZQsOrfysZsiLaUwZWSXVKnJfQ6yx_diRkFGyGg/exec';
+
+const H_START = 8, H_END = 22, REFRESH_MS = 15000;
+let cYear, cMonth, selDate=null, selHour=null, selDur=1;
+let booked={}, refreshT=null;
+
+const n=new Date(); cYear=n.getFullYear(); cMonth=n.getMonth();
+renderCal(); goStep(1);
+
+$('prevM').onclick=()=>{ cMonth--; if(cMonth<0){cMonth=11;cYear--;} renderCal(); };
+$('nextM').onclick=()=>{ cMonth++; if(cMonth>11){cMonth=0;cYear++;} renderCal(); };
+$$('.dur-btn').forEach(b=>b.addEventListener('click',()=>setDur(+b.dataset.d)));
+$('btnN1').onclick=()=>{ if(selDate&&selHour!==null){ fillSum(); goStep(2); } };
+$('btnB2').onclick=()=>goStep(1);
+$('btnN2').onclick=()=>{
+  const fn=$('fname').value.trim(), ln=$('lname').value.trim(), ph=$('phone').value.trim();
+  let ok=true;
+  ['fname','lname'].forEach(id=>{
+    const hasErr=!$(id).value.trim();
+    $(id).classList.toggle('err',hasErr);
+    $(`err-${id}`).style.display=hasErr?'block':'none';
+    if(hasErr) ok=false;
+  });
+  const phoneValid=/^09\d{9}$/.test(ph);
+  $('phone').classList.toggle('err',!phoneValid);
+  $('err-phone').style.display=!phoneValid?'block':'none';
+  if(!phoneValid) ok=false;
+  if(!ok){ toast('Please check all required fields.','error'); return; }
+  fillConfirm(fn,ln,ph); goStep(3);
+};
+$('btnB3').onclick=()=>goStep(2);
+$('btnSub').onclick=submitBooking;
+$('btnNew').onclick=()=>{
+  selDate=null; selHour=null; selDur=1;
+  ['fname','lname','phone','email','gcashRef'].forEach(id=>$(id).value='');
+  setDur(1); renderCal(); goStep(1);
+};
+['fname','lname'].forEach(id=>{
+  $(id).addEventListener('input',()=>{
+    if($(id).value.trim()){
+      $(id).classList.remove('err');
+      $(`err-${id}`).style.display='none';
+    }
+  });
+});
+$('phone').addEventListener('input',()=>{
+  if(/^09\d{9}$/.test($('phone').value.trim())){
+    $('phone').classList.remove('err');
+    $('err-phone').style.display='none';
+  }
+});
+$('gcashRef').addEventListener('input',()=>{
+  const val=$('gcashRef').value.replace(/\D/g,'');
+  $('gcashRef').value=val;
+  const valid=/^\d{13}$/.test(val);
+  $('btnSub').disabled=!valid;
+  $('gcashRef').classList.toggle('err',val.length>0&&!valid);
+  if(valid){ $('err-gcashRef').style.display='none'; }
+});
+
+function setDur(d){
+  selDur=d; selHour=null;
+  $$('.dur-btn').forEach(b=>b.classList.toggle('active',+b.dataset.d===d));
+  if(selDate) renderSlots();
+  updBtn();
+}
+
+function renderCal(){
+  const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  $('calM').textContent=`${MN[cMonth]} ${cYear}`;
+  const g=$('calG'); g.innerHTML='';
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>{
+    const el=mk('div','cal-dow'); el.textContent=d; g.appendChild(el);
+  });
+  const first=new Date(cYear,cMonth,1).getDay();
+  const days=new Date(cYear,cMonth+1,0).getDate();
+  const todayS=dateFmt(new Date());
+  for(let i=0;i<first;i++) g.appendChild(mk('div','cal-day empty'));
+  for(let d=1;d<=days;d++){
+    const ds=`${cYear}-${pad(cMonth+1)}-${pad(d)}`;
+    const el=mk('div','cal-day'); el.textContent=d;
+    const bk=booked[ds]||[];
+    if(ds<todayS){ el.classList.add('past'); }
+    else{
+      el.classList.add('available');
+      if(bk.length>0) el.classList.add('has-bookings');
+      if(bk.length>=H_END-H_START) el.classList.add('full');
+      if(ds===selDate) el.classList.add('selected');
+      el.onclick=()=>pickDate(ds);
+    }
+    g.appendChild(el);
+  }
+}
+
+function pickDate(ds){ selDate=ds; selHour=null; renderCal(); loadAvail(ds); updBtn(); }
+
+async function loadAvail(ds){
+  $('legend').style.display='flex';
+  $('rSpin').style.display='block';
+  $('rStatus').textContent='Fetching availability…';
+  try{
+    if(SCRIPT_URL==='YOUR_GOOGLE_APPS_SCRIPT_URL_HERE'){
+      await delay(350); booked[ds]=demoBookings();
+    } else {
+      const r=await fetch(`${SCRIPT_URL}?action=getBookings&date=${ds}&_=${Date.now()}`);
+      const data=await r.json();
+      booked[ds]=data.bookedHours||[];
+    }
+    renderSlots(); renderCal();
+    const t=new Date();
+    $('rUpd').textContent=`Updated ${t.getHours()}:${pad(t.getMinutes())}`;
+    $('rStatus').textContent='Availability loaded';
+  } catch(e){
+    $('rStatus').textContent='Could not refresh — data may be stale';
+  }
+  $('rSpin').style.display='none';
+  clearTimeout(refreshT);
+  refreshT=setTimeout(()=>{ if(selDate) loadAvail(selDate); },REFRESH_MS);
+}
+
+function renderSlots(){
+  const c=$('timeC'); c.innerHTML='';
+  const bk=booked[selDate]||[];
+  const g=mk('div','time-grid');
+  const isToday=selDate===dateFmt(new Date());
+  const currentHour=new Date().getHours();
+  if(isToday&&selHour!==null&&selHour<=currentHour){ selHour=null; updBtn(); }
+  for(let h=H_START;h<H_END;h++){
+    const isPast=isToday&&h<=currentHour;
+    const isBk=!isPast&&bk.includes(h);
+    const isBl=!isPast&&!isBk&&isBlocked(h,bk);
+    const isSel=!isPast&&selHour!==null&&h>=selHour&&h<selHour+selDur;
+    const isStart=!isPast&&h===selHour;
+    const s=mk('div','ts');
+    const lbl=mk('span','ts-time'); lbl.textContent=h12(h);
+    const tag=mk('span','ts-tag');
+    s.appendChild(lbl); s.appendChild(tag);
+    if(isPast){ s.classList.add('bl'); tag.textContent='Past'; }
+    else if(isBk){ s.classList.add('bk'); tag.textContent='Booked'; }
+    else if(isBl){ s.classList.add('bl'); tag.textContent='Blocked'; }
+    else if(isStart){ s.classList.add('sel'); tag.textContent='✓ Start'; s.onclick=()=>pick(h); }
+    else if(isSel){ s.classList.add('sel-c'); tag.textContent='Your slot'; s.onclick=()=>pick(h); }
+    else { s.classList.add('av'); tag.textContent='Available'; s.onclick=()=>pick(h); }
+    g.appendChild(s);
+  }
+  c.appendChild(g);
+}
+
+function isBlocked(h,bk){
+  if(selDur<=1) return false;
+  if(h+selDur>H_END) return true;
+  for(let i=h+1;i<h+selDur;i++) if(bk.includes(i)) return true;
+  return false;
+}
+
+function pick(h){
+  const bk=booked[selDate]||[];
+  if(isBlocked(h,bk)){ toast(`${selDur}h duration doesn't fit here.`,'error'); return; }
+  for(let i=h;i<h+selDur;i++){
+    if(bk.includes(i)||i>=H_END){ toast('That slot overlaps a booked time.','error'); return; }
+  }
+  selHour=h; renderSlots(); updBtn();
+}
+
+function fillSum(){
+  $('s-date').textContent=humanDate(selDate);
+  $('s-time').textContent=`${h12(selHour)} – ${h12(selHour+selDur)}`;
+  $('s-dur').textContent=`${selDur} hour${selDur>1?'s':''}`;
+  $('s-price').textContent=`₱${(selDur*250).toLocaleString()}`;
+}
+function fillConfirm(fn,ln,ph){
+  $('c-name').textContent=`${fn} ${ln}`;
+  $('c-phone').textContent=ph;
+  $('c-date').textContent=humanDate(selDate);
+  $('c-time').textContent=`${h12(selHour)} – ${h12(selHour+selDur)}`;
+  $('c-dur').textContent=`${selDur} hour${selDur>1?'s':''}`;
+  $('c-price').textContent=`₱${(selDur*250).toLocaleString()}`;
+}
+
+// BUG FIX: Content-Type must be "text/plain" to avoid a CORS preflight OPTIONS
+// request, which Google Apps Script does not handle. The JSON body is still sent
+// intact and readable on the server via e.postData.contents.
+async function submitBooking(){
+  const gcashRefVal=$('gcashRef').value.trim();
+  if(!/^\d{13}$/.test(gcashRefVal)){
+    $('gcashRef').classList.add('err');
+    $('err-gcashRef').style.display='block';
+    toast('GCash reference must be exactly 13 digits.','error');
+    return;
+  }
+  if(SCRIPT_URL==='YOUR_GOOGLE_APPS_SCRIPT_URL_HERE'){ fakeSuccess(); return; }
+  const btn=$('btnSub'), txt=$('subTxt'), sp=$('subSpin');
+  btn.disabled=true; txt.textContent='Booking…'; sp.style.display='block';
+  const payload={
+    action:'book',
+    name:`${$('fname').value.trim()} ${$('lname').value.trim()}`,
+    phone:$('phone').value.trim(), email:$('email').value.trim(),
+    date:selDate, startHour:selHour, duration:selDur,
+    totalPrice:selDur*250,
+    gcashRef:$('gcashRef').value.trim()
+  };
+  try{
+    const r=await fetch(SCRIPT_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify(payload)
+    });
+    const data=await r.json();
+    if(data.result==='success'){ fakeSuccess(); }
+    else if(data.result==='conflict'){
+      toast('⚠️ That slot was just taken! Please pick another.','error');
+      booked[selDate]=data.bookedHours||[]; selHour=null;
+      renderSlots(); updBtn(); goStep(1);
+    } else { throw new Error(data.error||'Unknown error'); }
+  } catch(e){ toast('❌ Booking failed. Please try again.','error'); }
+  btn.disabled=false; txt.textContent='Confirm Booking'; sp.style.display='none';
+}
+
+function fakeSuccess(){
+  $('ok-date').textContent=humanDate(selDate);
+  $('ok-time').textContent=`${h12(selHour)} – ${h12(selHour+selDur)}`;
+  $('ok-dur').textContent=`${selDur} hour${selDur>1?'s':''}`;
+  $('ok-ref').textContent=`#PB${Date.now().toString().slice(-6)}`;
+  goStep('ok');
+}
+
+function goStep(s){
+  const map={1:'v1',2:'v2',3:'v3',ok:'vOK'};
+  Object.values(map).forEach(id=>$(id).style.display='none');
+  $(map[s]).style.display='';
+  $('courtInfo').style.display=s===1?'':'none';
+  if(s===3){ $('btnSub').disabled=true; $('gcashRef').value=''; $('gcashRef').classList.remove('err'); $('err-gcashRef').style.display='none'; }
+  [1,2,3].forEach(n=>{
+    const el=$(`stp-${n}`);
+    el.classList.remove('active','done');
+    if(s===n) el.classList.add('active');
+    else if(typeof s==='number'&&n<s) el.classList.add('done');
+  });
+  $('line-1').classList.toggle('done',typeof s==='number'&&s>1);
+  $('line-2').classList.toggle('done',typeof s==='number'&&s>2);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function updBtn(){ $('btnN1').disabled=!(selDate&&selHour!==null); }
+
+function $(id){ return document.getElementById(id); }
+function $$(sel){ return document.querySelectorAll(sel); }
+function mk(tag,cls){ const e=document.createElement(tag); if(cls) e.className=cls; return e; }
+function pad(n){ return String(n).padStart(2,'0'); }
+function dateFmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function h12(h){ const ap=h<12?'AM':'PM'; return `${h%12||12}:00 ${ap}`; }
+function humanDate(s){
+  const [y,m,d]=s.split('-');
+  const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${MN[+m-1]} ${+d}, ${y}`;
+}
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function demoBookings(){
+  const pool=[8,9,10,11,12,13,14,15,16,17,18,19,20,21]; const out=[];
+  const n=Math.floor(Math.random()*6)+2;
+  for(let i=0;i<n;i++){ const h=pool[Math.floor(Math.random()*pool.length)]; if(!out.includes(h)) out.push(h); }
+  return out;
+}
+function toast(msg,type='success'){
+  const t=$('toast'); t.textContent=msg;
+  t.className=`toast ${type}`; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3800);
+}
+</script>
+</body>
+</html>
