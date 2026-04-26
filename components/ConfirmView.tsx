@@ -1,9 +1,10 @@
 'use client'
 
+import Image from 'next/image'
 import {
-  QrCode, ChevronLeft, Loader2,
+  ChevronLeft, Loader2,
   User, Phone, CalendarDays, Clock, Timer, Banknote,
-  CheckCircle2, Info,
+  CheckCircle2, Info, QrCode,
 } from 'lucide-react'
 import type { SummaryData } from '@/types/booking'
 
@@ -39,17 +40,17 @@ export default function ConfirmView({
   // ── input border / ring states ──────────────────────────────────────────────
   const inputClass = [
     'w-full border rounded-xl px-4 py-3.5 pr-11 text-stone-900 text-sm bg-white',
-    'placeholder:text-stone-300 outline-none transition-all duration-200',
+    'placeholder:text-stone-300 outline-none transition-[border-color,box-shadow,background-color] duration-200 ease-out',
     'font-mono tracking-wider',
     isRefValid
-      ? 'border-[#006241] ring-2 ring-[#006241]/15 bg-[#F8FDF9]'
+      ? 'border-[#006241] ring-2 ring-[#006241]/15 bg-[#E8F3EE]/20'
       : showError
       ? 'border-red-400 ring-2 ring-red-100'
       : 'border-stone-200 focus:ring-2 focus:ring-[#006241]/20 focus:border-[#006241]',
   ].join(' ')
 
   return (
-    <div className="space-y-4 animate-fade-up">
+    <div className="space-y-4">
 
       {/* ── Review card ── */}
       <div className={`bg-white rounded-2xl ${SHADOW} p-7`}>
@@ -82,31 +83,23 @@ export default function ConfirmView({
 
         {/* QR section */}
         <div className="flex flex-col items-center bg-[#FAF8F5] border border-stone-100 rounded-2xl px-6 py-7 mb-6">
-          <div className="text-[1.75rem] font-extrabold tracking-tight mb-5 leading-none select-none">
-            <span className="text-[#00aeef]">G</span>
-            <span className="text-stone-800">Cash</span>
-          </div>
-
-          {/* QR frame */}
-          <div className="relative w-40 h-40 bg-white border border-stone-200 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
-            {/* Corner markers */}
-            <span className="absolute top-3 left-3 w-5 h-5 border-t-[3px] border-l-[3px] border-[#006241] rounded-tl" />
-            <span className="absolute top-3 right-3 w-5 h-5 border-t-[3px] border-r-[3px] border-[#006241] rounded-tr" />
-            <span className="absolute bottom-3 left-3 w-5 h-5 border-b-[3px] border-l-[3px] border-[#006241] rounded-bl" />
-            <span className="absolute bottom-3 right-3 w-5 h-5 border-b-[3px] border-r-[3px] border-[#006241] rounded-br" />
-            <QrCode className="w-20 h-20 text-stone-200" strokeWidth={1} />
-          </div>
-
+          <Image
+            src={process.env.NEXT_PUBLIC_GCASH_QR_PATH ?? '/gcash-qr.png'}
+            alt="Scan to pay via GCash"
+            width={224}
+            height={224}
+            className="rounded-2xl shadow-md mb-4"
+          />
           <p className="text-xs text-stone-500 text-center leading-relaxed max-w-[220px]">
-            Open GCash → Scan QR to pay.<br />
-            Copy your <span className="font-medium text-stone-600">13-digit reference number</span> before closing.
+            Open GCash → <span className="font-medium text-stone-600">Scan QR</span> or use <span className="font-medium text-stone-600">Pay QR</span> to send payment.<br className="mb-1" />
+            Then enter your <span className="font-medium text-stone-600">13-digit reference</span> below.
           </p>
         </div>
 
         {/* Reference input */}
         <div className="mb-2">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold tracking-widest uppercase text-stone-500">
+            <label htmlFor="gcash-ref" className="text-xs font-semibold tracking-widest uppercase text-stone-500">
               GCash Reference Number
             </label>
             <span className={`text-xs font-medium tabular-nums transition-colors duration-200 ${
@@ -118,6 +111,7 @@ export default function ConfirmView({
 
           <div className="relative">
             <input
+              id="gcash-ref"
               type="text"
               inputMode="numeric"
               maxLength={13}
@@ -162,7 +156,7 @@ export default function ConfirmView({
         <div className="flex gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 border border-stone-200 text-stone-600 hover:bg-stone-50 font-medium text-sm rounded-xl px-5 py-3.5 transition-colors duration-200 cursor-pointer flex-shrink-0"
+            className="flex items-center gap-1.5 border border-stone-200 text-stone-600 hover:bg-stone-50 font-medium text-sm rounded-xl px-5 py-3.5 transition-colors duration-200 ease-out cursor-pointer flex-shrink-0"
           >
             <ChevronLeft className="w-4 h-4" />
             Back
@@ -170,7 +164,16 @@ export default function ConfirmView({
           <button
             onClick={onSubmit}
             disabled={submitting || !isRefValid}
-            className="flex-1 flex items-center justify-center gap-2.5 bg-[#006241] hover:bg-[#004d32] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl py-3.5 transition-colors duration-200 cursor-pointer"
+            className={[
+              'flex-1 flex items-center justify-center gap-2.5',
+              'text-white font-semibold text-base rounded-full py-3.5',
+              'transition-[background-color,transform,filter] duration-150 ease-out',
+              submitting
+                ? 'bg-[#006241]/85 scale-[0.98] cursor-wait'
+                : !isRefValid
+                ? 'bg-[#006241] opacity-40 cursor-not-allowed'
+                : 'bg-[#006241] hover:bg-[#004d32] active:scale-[0.97] active:filter active:brightness-90 motion-reduce:active:scale-100 cursor-pointer',
+            ].join(' ')}
           >
             {submitting ? (
               <>

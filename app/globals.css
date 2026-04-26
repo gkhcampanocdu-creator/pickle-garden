@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "../node_modules/tailwindcss/index.css";
 
 @theme inline {
   --color-background: var(--background);
@@ -12,6 +12,10 @@
   --foreground: #1C1917;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--background);
@@ -21,7 +25,7 @@ body {
 }
 
 .animate-fade-up {
-  animation: fade-up 0.3s ease both;
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-pop-in {
@@ -59,4 +63,109 @@ body {
   20%, 80% { transform: translateX(4px); }
   30%, 50%, 70% { transform: translateX(-6px); }
   40%, 60% { transform: translateX(6px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping-slow {
+  75%, 100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.animate-ring-expand {
+  animation: ring-expand 0.7s ease-out forwards;
+}
+
+@keyframes ring-expand {
+  from { transform: scale(1); opacity: 0.7; }
+  to   { transform: scale(2.6); opacity: 0; }
+}
+
+.animate-burst-out {
+  animation: burst-out 0.55s cubic-bezier(0.2, 0, 0.38, 1) forwards;
+}
+
+@keyframes burst-out {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+
+/* ── Hero: premium expo-out entrance ───────────────────────────── */
+.animate-hero-enter {
+  animation: hero-enter 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hero-enter {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Badge: continuous gentle bob ──────────────────────────────── */
+.animate-badge-float {
+  animation: badge-float 4.6s ease-in-out infinite;
+}
+
+@keyframes badge-float {
+  0%, 100% { transform: translateY(0);   }
+  50%       { transform: translateY(-5px); }
+}
+
+/* ── Background grid: slow breathing rise-and-fall ─────────────── */
+.animate-grid-breathe {
+  animation: grid-breathe 6.5s ease-in-out infinite;
+}
+
+@keyframes grid-breathe {
+  0%, 100% { opacity: 0.55; background-position: 0 0;   }
+  50%       { opacity: 1;    background-position: 0 6px; }
+}
+
+/* ── Modal: card entrance ───────────────────────────────────────── */
+.animate-modal-enter {
+  animation: modal-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes modal-enter {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* ── Modal: backdrop fade ───────────────────────────────────────── */
+.animate-backdrop-enter {
+  animation: backdrop-enter 0.22s ease-out both;
+}
+
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-pop-in,
+  .animate-shake,
+  .animate-float,
+  .animate-ping-slow,
+  .animate-ring-expand,
+  .animate-burst-out,
+  .animate-hero-enter,
+  .animate-badge-float,
+  .animate-grid-breathe,
+  .animate-modal-enter,
+  .animate-backdrop-enter {
+    animation: none;
+  }
 }

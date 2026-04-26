@@ -11,7 +11,7 @@ export interface AdminBooking {
   total_price: number
   gcash_ref: string
   is_paid: boolean
-  confirmed: boolean
+  status: string
   created_at: string
 }
 
@@ -27,28 +27,42 @@ export async function fetchAllBookings(): Promise<AdminBooking[]> {
       .from('bookings')
       .select('*')
       .gte('booking_date', todayStr())
+      .neq('status', 'cancelled')
       .order('booking_date', { ascending: true })
       .order('start_hour', { ascending: true })
 
     if (error) throw error
     return data ?? []
   } catch (err) {
-    console.log('Supabase Error Detail:', err)
+    console.error('[admin] fetchAllBookings error:', err)
     throw err
   }
 }
 
-/** Flips the is_paid flag for a single booking. */
-export async function updatePaymentStatus(id: string, isPaid: boolean): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ is_paid: isPaid })
-      .eq('id', id)
+// Writes go through server-side API routes (bypasses RLS with service role key).
+// The adminToken is the admin password, verified server-side against ADMIN_PASSWORD.
 
-    if (error) throw error
-  } catch (err) {
-    console.log('Supabase Error Detail:', err)
-    throw err
+async function adminPost(path: string, body: object, adminToken: string): Promise<void> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-token': adminToken,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`)
   }
+}
+
+/** Flips the is_paid flag for a single booking. */
+export async function updatePaymentStatus(id: string, isPaid: boolean, adminToken: string): Promise<void> {
+  await adminPost('/api/admin/update-payment', { id, isPaid }, adminToken)
+}
+
+/** Soft-deletes a booking by setting status = 'cancelled'. */
+export async function cancelBooking(id: string, adminToken: string): Promise<void> {
+  await adminPost('/api/admin/cancel', { id }, adminToken)
 }

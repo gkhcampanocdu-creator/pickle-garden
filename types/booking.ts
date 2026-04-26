@@ -3,12 +3,15 @@ export interface BookingFormData {
   lastName: string
   phone: string
   email: string
+  consent: boolean
 }
 
 export interface BookingFormErrors {
   firstName?: string
   lastName?: string
   phone?: string
+  email?: string
+  consent?: string
 }
 
 export interface SummaryData {

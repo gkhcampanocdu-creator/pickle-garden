@@ -21,16 +21,14 @@ export class SlotConflictError extends Error {
 
 /** Returns every occupied hour number for a given date (e.g. [10, 11] for a 2h booking at 10). */
 export async function fetchBookedHours(date: string): Promise<number[]> {
-  console.log('[bookings] fetchBookedHours →', { date })
   try {
     const { data, error } = await supabase
       .from('bookings')
       .select('start_hour, duration')
       .eq('booking_date', date)
+      .neq('status', 'cancelled')
 
     if (error) throw error
-
-    console.log('[bookings] fetchBookedHours rows', data)
 
     const occupied: number[] = []
     for (const row of data ?? []) {
@@ -40,45 +38,76 @@ export async function fetchBookedHours(date: string): Promise<number[]> {
     }
     return occupied
   } catch (err) {
-    console.log('Supabase Error Detail:', err)
+    console.error('[bookings] fetchBookedHours error:', err)
     throw err
   }
 }
 
 /**
- * Submits a booking to Supabase.
- * Re-fetches availability first to catch concurrent bookings, then inserts.
- * Throws SlotConflictError if the slot is taken (either pre-check or DB unique violation).
+ * Submits a booking via the atomic `create_booking` Supabase RPC.
+ * The RPC acquires a pg_advisory_xact_lock per date so the conflict check
+ * and INSERT are serialised — eliminating the race window entirely.
+ *
+ * Falls back to the legacy manual check+insert path if the RPC doesn't exist
+ * yet (PGRST202 = function not found), so the app stays functional before the
+ * migration has been applied.
+ *
+ * Throws SlotConflictError if the slot is taken.
  * Returns the booking reference string on success.
  */
 export async function submitBooking(payload: BookingPayload): Promise<string> {
-  // Optimistic conflict check — catches most races without relying solely on DB constraints
+  // --- Primary path: atomic RPC ---
+  const { data: rpcData, error: rpcError } = await supabase.rpc('create_booking', {
+    p_guest_name:   payload.guestName,
+    p_phone:        payload.phone,
+    p_email:        payload.email,
+    p_booking_date: payload.date,
+    p_start_hour:   payload.startHour,
+    p_duration:     payload.duration,
+    p_total_price:  payload.totalPrice,
+    p_gcash_ref:    payload.gcashRef,
+  })
+
+  if (!rpcError) {
+    return `#PB${(rpcData as string).slice(0, 6).toUpperCase()}`
+  }
+
+  // SLOT_CONFLICT raised inside the function
+  if (rpcError.message?.includes('SLOT_CONFLICT')) {
+    throw new SlotConflictError()
+  }
+
+  // PGRST202 = RPC function not found (migration not yet applied) — use legacy path
+  if (rpcError.code !== 'PGRST202') {
+    console.error('[bookings] RPC error:', rpcError)
+    throw rpcError
+  }
+
+  // --- Legacy fallback path ---
+  console.warn('[bookings] create_booking RPC not found, falling back to manual insert')
+
   const bookedHours = await fetchBookedHours(payload.date)
   for (let h = payload.startHour; h < payload.startHour + payload.duration; h++) {
     if (bookedHours.includes(h)) throw new SlotConflictError()
   }
 
-  const insertRow = {
-    guest_name: payload.guestName,
-    phone: payload.phone,
-    email: payload.email,
-    booking_date: payload.date,          // string  'YYYY-MM-DD'
-    start_hour: payload.startHour,       // integer
-    duration: payload.duration,          // integer
-    total_price: payload.totalPrice,
-    gcash_ref: payload.gcashRef,
-  }
-  console.log('[bookings] submitBooking insert →', insertRow)
-
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .insert(insertRow)
+      .insert({
+        guest_name:   payload.guestName,
+        phone:        payload.phone,
+        email:        payload.email,
+        booking_date: payload.date,
+        start_hour:   payload.startHour,
+        duration:     payload.duration,
+        total_price:  payload.totalPrice,
+        gcash_ref:    payload.gcashRef,
+      })
       .select('id')
       .single()
 
     if (error) {
-      // PostgreSQL unique-violation — slot taken in the narrow race window
       if (error.code === '23505') throw new SlotConflictError()
       throw error
     }
@@ -86,7 +115,7 @@ export async function submitBooking(payload: BookingPayload): Promise<string> {
     return `#PB${(data.id as string).slice(0, 6).toUpperCase()}`
   } catch (err) {
     if (err instanceof SlotConflictError) throw err
-    console.log('Supabase Error Detail:', err)
+    console.error('[bookings] submitBooking fallback error:', err)
     throw err
   }
 }
