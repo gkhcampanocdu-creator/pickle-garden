@@ -27,23 +27,21 @@ export interface BookingPayload {
   guestName: string
   phone: string
   email: string
-  date: string      // YYYY-MM-DD
-  startHour: number // 8–21  (integer)
-  duration: number  // 1–4   (integer)
+  date: string           // YYYY-MM-DD
+  selectedHours: number[] // individual hour slots chosen by the user
   totalPrice: number
   gcashRef: string
 }
 
 export interface PendingBookingEntry {
-  bookingDate: string   // YYYY-MM-DD
-  startHour: number
-  duration: number
+  bookingDate: string    // YYYY-MM-DD
+  selectedHours: number[]
   totalPrice: number
   guestName: string
   phone: string
   email: string
   gcashRef: string
-  savedAt: number       // Date.now() timestamp
+  savedAt: number        // Date.now() timestamp
 }
 
 export interface AdminBooking {

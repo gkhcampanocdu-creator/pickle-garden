@@ -31,6 +31,11 @@ export function getPendingBooking(): PendingBookingEntry | null {
       localStorage.removeItem(STORAGE_KEY)
       return null
     }
+    // Discard entries saved under the old startHour/duration schema
+    if (!Array.isArray(entry.selectedHours) || entry.selectedHours.length === 0) {
+      localStorage.removeItem(STORAGE_KEY)
+      return null
+    }
     return entry
   } catch {
     return null

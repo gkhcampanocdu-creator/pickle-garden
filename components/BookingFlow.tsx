@@ -20,8 +20,11 @@ import { savePendingBooking, clearPendingBooking, getPendingBooking } from '@/li
 import { pad, h12 } from '@/lib/utils'
 
 const H_START = 8
-const H_END = 22
+const H_END = 21
 const PRICE_PER_HOUR = parseInt(process.env.NEXT_PUBLIC_PRICE_PER_HOUR ?? '300', 10)
+function calcPrice(hrs: number): number {
+  return hrs === 4 ? 1000 : hrs * PRICE_PER_HOUR
+}
 const MAX_ADVANCE_DAYS = 60
 
 const SHADOW = 'shadow-[0_4px_24px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.04)]'
@@ -90,10 +93,10 @@ function Divider() {
 
 function SummaryBox({ summary }: { summary: SummaryData }) {
   const rows = [
-    { Icon: CalendarDays, label: 'Date', value: summary.date },
-    { Icon: Clock, label: 'Time', value: summary.time },
-    { Icon: Timer, label: 'Duration', value: summary.duration },
-    { Icon: Banknote, label: 'Total', value: summary.price, highlight: true },
+    { Icon: CalendarDays, label: 'Date',     value: summary.date },
+    { Icon: Clock,        label: 'Time',     value: summary.time },
+    { Icon: Timer,        label: 'Duration', value: summary.duration },
+    { Icon: Banknote,     label: 'Total',    value: summary.price, highlight: true },
   ]
   return (
     <dl className="divide-y divide-stone-100 bg-stone-50 rounded-xl px-5">
@@ -103,9 +106,22 @@ function SummaryBox({ summary }: { summary: SummaryData }) {
             <Icon className="w-4 h-4 text-[#006241]" />
             {label}
           </dt>
-          <dd className={`text-sm font-semibold ${highlight ? 'text-[#006241] text-base' : 'text-stone-800'}`}>
-            {value}
-          </dd>
+          {highlight ? (
+            <AnimatePresence mode="wait">
+              <motion.dd
+                key={value}
+                initial={{ scale: 0.88, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.88, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                className="text-base font-semibold text-[#006241]"
+              >
+                {value}
+              </motion.dd>
+            </AnimatePresence>
+          ) : (
+            <dd className="text-sm font-semibold text-stone-800">{value}</dd>
+          )}
         </div>
       ))}
     </dl>
@@ -129,7 +145,7 @@ export default function BookingFlow() {
   const [calYear, setCalYear] = useState(now.getFullYear())
   const [calMonth, setCalMonth] = useState(now.getMonth())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [selectedHour, setSelectedHour] = useState<number | null>(null)
+  const [selectedSlots, setSelectedSlots] = useState<number[]>([])
   const [duration, setDuration] = useState(1)
   const [bookedMap, setBookedMap] = useState<Record<string, number[]>>({})
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -172,7 +188,7 @@ export default function BookingFlow() {
 
   async function handlePickDate(dateStr: string) {
     setSelectedDate(dateStr)
-    setSelectedHour(null)
+    setSelectedSlots([])
     setLoadingSlots(true)
     try {
       const hours = await fetchBookedHours(dateStr)
@@ -186,7 +202,16 @@ export default function BookingFlow() {
 
   function handleSetDuration(d: number) {
     setDuration(d)
-    setSelectedHour(null)
+    setSelectedSlots([])
+  }
+
+  function handleToggleSlot(h: number) {
+    setSlotConflict(false)
+    setSelectedSlots(prev => {
+      if (prev.includes(h)) return prev.filter(s => s !== h)
+      if (prev.length < duration) return [...prev, h]
+      return [...prev.slice(1), h]
+    })
   }
 
   function validateForm(): boolean {
@@ -206,7 +231,7 @@ export default function BookingFlow() {
   function goStep3() { setDirection(1); setStep(3) }
 
   function handleStep1Continue() {
-    if (selectedDate && selectedHour !== null) goStep2()
+    if (selectedDate && selectedSlots.length === duration) goStep2()
   }
 
   function handleStep2Continue() {
@@ -235,8 +260,8 @@ export default function BookingFlow() {
       consent: true,
     })
     setSelectedDate(entry.bookingDate)
-    setSelectedHour(entry.startHour)
-    setDuration(entry.duration)
+    setSelectedSlots(entry.selectedHours)
+    setDuration(entry.selectedHours.length)
     setGcashRef(entry.gcashRef)
     setLoadingSlots(true)
     fetchBookedHours(entry.bookingDate)
@@ -257,7 +282,7 @@ export default function BookingFlow() {
       isSubmittingRef.current = false
       return
     }
-    if (!selectedDate || selectedHour === null) {
+    if (!selectedDate || selectedSlots.length === 0) {
       isSubmittingRef.current = false
       return
     }
@@ -265,12 +290,12 @@ export default function BookingFlow() {
     setSubmitting(true)
     const guestName = [formData.firstName, formData.lastName].join(' ').trim()
     const normalizedPhone = normalizePhone(formData.phone)
+    const totalPrice = calcPrice(selectedSlots.length)
 
     savePendingBooking({
       bookingDate: selectedDate,
-      startHour: selectedHour,
-      duration,
-      totalPrice: duration * PRICE_PER_HOUR,
+      selectedHours: selectedSlots,
+      totalPrice,
       guestName,
       phone: normalizedPhone,
       email: formData.email,
@@ -283,9 +308,8 @@ export default function BookingFlow() {
         phone: normalizedPhone,
         email: formData.email,
         date: selectedDate,
-        startHour: selectedHour,
-        duration,
-        totalPrice: duration * PRICE_PER_HOUR,
+        selectedHours: selectedSlots,
+        totalPrice,
         gcashRef,
       })
       clearPendingBooking()
@@ -304,9 +328,9 @@ export default function BookingFlow() {
             guestName,
             bookingRef: ref,
             date: humanDate(selectedDate),
-            time: `${h12(selectedHour)} – ${h12(selectedHour + duration)}`,
-            duration: `${duration} hour${duration > 1 ? 's' : ''}`,
-            price: `₱${(duration * PRICE_PER_HOUR).toLocaleString()}`,
+            time: [...selectedSlots].sort((a, b) => a - b).map(h12).join(', '),
+            duration: `${selectedSlots.length} hour${selectedSlots.length > 1 ? 's' : ''}`,
+            price: `₱${totalPrice.toLocaleString()}`,
             gcashRef,
           }),
         }).catch(() => {/* silent — booking is already confirmed */})
@@ -316,7 +340,7 @@ export default function BookingFlow() {
         clearPendingBooking()
         setPendingBooking(null)
         showToast('That slot was just taken — availability has been refreshed.', 'error')
-        setSelectedHour(null)
+        setSelectedSlots([])
         setSlotConflict(true)
         setLoadingSlots(true)
         try {
@@ -340,7 +364,7 @@ export default function BookingFlow() {
     setDirection(-1)
     setStep(1)
     setSelectedDate(null)
-    setSelectedHour(null)
+    setSelectedSlots([])
     setDuration(1)
     setFormData({ firstName: '', lastName: '', phone: '', email: '', consent: false })
     setFormErrors({})
@@ -352,13 +376,13 @@ export default function BookingFlow() {
   }
 
   const bookedHours = selectedDate ? (bookedMap[selectedDate] ?? []) : []
-  const canContinue = selectedDate !== null && selectedHour !== null
+  const canContinue = selectedDate !== null && selectedSlots.length === duration
 
   const summaryData: SummaryData = {
     date: selectedDate ? humanDate(selectedDate) : '—',
-    time: selectedHour !== null ? `${h12(selectedHour)} – ${h12(selectedHour + duration)}` : '—',
+    time: selectedSlots.length > 0 ? [...selectedSlots].sort((a, b) => a - b).map(h12).join(' · ') : '—',
     duration: `${duration} hour${duration > 1 ? 's' : ''}`,
-    price: `₱${(duration * PRICE_PER_HOUR).toLocaleString()}`,
+    price: `₱${calcPrice(duration).toLocaleString()}`,
     name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || '—',
     phone: formData.phone || '—',
   }
@@ -422,7 +446,7 @@ export default function BookingFlow() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-blue-800 font-medium">Unfinished booking found</p>
                         <p className="text-xs text-blue-600 mt-0.5">
-                          {humanDate(pendingBooking.bookingDate)} · {h12(pendingBooking.startHour)}
+                          {humanDate(pendingBooking.bookingDate)} · {[...pendingBooking.selectedHours].sort((a, b) => a - b).map(h12).join(', ')}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
@@ -472,14 +496,13 @@ export default function BookingFlow() {
                   <SectionTitle>Choose a Time Slot</SectionTitle>
                   <TimeSlots
                     selectedDate={selectedDate}
-                    selectedHour={selectedHour}
-                    duration={duration}
+                    selectedSlots={selectedSlots}
                     bookedHours={bookedHours}
                     loading={loadingSlots}
                     hStart={H_START}
                     hEnd={H_END}
                     today={todayStr}
-                    onPickHour={h => { setSelectedHour(h); setSlotConflict(false) }}
+                    onToggleSlot={handleToggleSlot}
                   />
 
                   <div className="mt-6">
@@ -518,7 +541,7 @@ export default function BookingFlow() {
                       <span className="font-sans font-normal text-[#006241]/30 mx-1.5" aria-hidden="true">·</span>
                       {duration} hr{duration > 1 ? 's' : ''}
                       <span className="font-sans font-normal text-[#006241]/30 mx-1.5" aria-hidden="true">·</span>
-                      {selectedHour !== null ? `${h12(selectedHour)} – ${h12(selectedHour + duration)}` : '—'}
+                      {selectedSlots.length > 0 ? [...selectedSlots].sort((a, b) => a - b).map(h12).join(' · ') : '—'}
                     </p>
                   </div>
 

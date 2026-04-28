@@ -103,7 +103,7 @@ export default function Hero() {
       </div>
 
       {/* ── Main content ── */}
-      <div className="relative z-10 flex flex-col items-center justify-center flex-1 text-center px-5 py-16 sm:py-24 gap-6">
+      <div className="relative z-10 flex flex-col items-center justify-center flex-1 text-center px-5 pt-32 pb-16 sm:pt-36 sm:pb-24 gap-6">
 
         {/* Overline */}
         <motion.div
@@ -111,7 +111,7 @@ export default function Hero() {
           variants={item(0)}
           style={{ willChange: 'transform' }}
         >
-          <p className="text-[0.58rem] font-bold tracking-[0.35em] uppercase text-white/40">
+          <p className="text-[0.58rem] font-bold tracking-[0.35em] uppercase text-white/40 leading-normal">
             Pickle Garden &nbsp;·&nbsp; Cebu
           </p>
         </motion.div>
@@ -134,7 +134,7 @@ export default function Hero() {
         {/* Headline */}
         <h1 className="font-serif text-[clamp(2.8rem,8.5vw,5.8rem)] font-semibold leading-[1.06] tracking-tight max-w-3xl mx-auto">
           <motion.div
-            className="block overflow-hidden"
+            className="block overflow-visible"
             initial="hidden" animate="visible"
             variants={item(0.17)}
             style={{ willChange: 'transform' }}
@@ -142,7 +142,7 @@ export default function Hero() {
             <span className="text-[#FAF8F5]">Elevate Your Game.</span>
           </motion.div>
           <motion.div
-            className="block overflow-hidden"
+            className="block overflow-visible"
             initial="hidden" animate="visible"
             variants={item(0.27)}
             style={{ willChange: 'transform' }}
