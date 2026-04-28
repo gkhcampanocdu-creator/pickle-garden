@@ -15,11 +15,12 @@ interface FieldProps {
   htmlFor: string
   optional?: boolean
   error?: string
+  hint?: string
   icon?: React.ReactNode
   children: React.ReactNode
 }
 
-function Field({ label, htmlFor, optional, error, icon, children }: FieldProps) {
+function Field({ label, htmlFor, optional, error, hint, icon, children }: FieldProps) {
   return (
     <div>
       <label htmlFor={htmlFor} className="flex items-baseline gap-1.5 text-xs font-semibold tracking-widest uppercase text-stone-500 mb-2">
@@ -38,6 +39,7 @@ function Field({ label, htmlFor, optional, error, icon, children }: FieldProps) 
         )}
         {children}
       </div>
+      {hint && !error && <p className="text-[0.7rem] text-stone-400 mt-1.5">{hint}</p>}
       {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
     </div>
   )
@@ -89,6 +91,7 @@ export default function BookingForm({ data, errors, onChange, onClearError }: Pr
         label="Phone Number"
         htmlFor="phone"
         icon={<Phone className="w-4 h-4" />}
+        hint="Use format: 09171234567 or +639171234567"
         error={errors.phone}
       >
         <input
@@ -101,9 +104,6 @@ export default function BookingForm({ data, errors, onChange, onClearError }: Pr
           value={data.phone}
           onChange={e => handle('phone', e.target.value)}
         />
-        {!errors.phone && (
-          <p className="text-[0.7rem] text-stone-400 mt-1.5">Use format: 09171234567 or +639171234567</p>
-        )}
       </Field>
 
       <Field

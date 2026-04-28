@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, LogOut, CalendarX2, Copy, Check, Download, Search, Trash2, CheckSquare, Square } from 'lucide-react'
-import { fetchAllBookings, updatePaymentStatus, cancelBooking, type AdminBooking } from '@/lib/admin'
+import { fetchAllBookings, updatePaymentStatus, cancelBooking } from '@/lib/admin'
+import type { AdminBooking } from '@/types/booking'
+import { pad, h12 } from '@/lib/utils'
 
 const SESSION_KEY = 'pg_admin_auth'
 const SESSION_TTL = 24 * 60 * 60 * 1000 // 24 hours
@@ -28,13 +30,11 @@ function storeSession(token: string) {
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-function pad(n: number) { return String(n).padStart(2, '0') }
 function getDateStr(offset = 0) {
   const d = new Date()
   d.setDate(d.getDate() + offset)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-function h12(h: number) { return `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}` }
 function shortDate(s: string) {
   const [, m, d] = s.split('-')
   return `${MONTHS[+m - 1]} ${+d}`
@@ -181,7 +181,6 @@ function BookingCard({
   showDate,
   selectMode,
   selected,
-  adminToken,
   onToggleSelect,
   onTogglePaid,
   onCancel,
@@ -190,7 +189,6 @@ function BookingCard({
   showDate: boolean
   selectMode: boolean
   selected: boolean
-  adminToken: string
   onToggleSelect: (id: string) => void
   onTogglePaid: (id: string, newVal: boolean) => void
   onCancel: (id: string) => void
@@ -210,9 +208,6 @@ function BookingCard({
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
-
-  // suppress unused-prop lint — adminToken is threaded through for future per-card use
-  void adminToken
 
   return (
     <div
@@ -318,7 +313,7 @@ function BookingCard({
 // ── Section ───────────────────────────────────────────────────────────────────
 
 function Section({
-  title, subtitle, showDate, bookings, selectMode, selectedIds, adminToken,
+  title, subtitle, showDate, bookings, selectMode, selectedIds,
   onToggleSelect, onTogglePaid, onCancel,
 }: {
   title: string
@@ -327,7 +322,6 @@ function Section({
   bookings: AdminBooking[]
   selectMode: boolean
   selectedIds: Set<string>
-  adminToken: string
   onToggleSelect: (id: string) => void
   onTogglePaid: (id: string, newVal: boolean) => void
   onCancel: (id: string) => void
@@ -351,7 +345,6 @@ function Section({
             showDate={showDate}
             selectMode={selectMode}
             selected={selectedIds.has(b.id)}
-            adminToken={adminToken}
             onToggleSelect={onToggleSelect}
             onTogglePaid={onTogglePaid}
             onCancel={onCancel}
@@ -663,7 +656,6 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
               bookings={grouped.today}
               selectMode={selectMode}
               selectedIds={selectedIds}
-              adminToken={adminToken}
               onToggleSelect={toggleSelect}
               onTogglePaid={handleTogglePaid}
               onCancel={handleCancel}
@@ -675,7 +667,6 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
               bookings={grouped.tomorrow}
               selectMode={selectMode}
               selectedIds={selectedIds}
-              adminToken={adminToken}
               onToggleSelect={toggleSelect}
               onTogglePaid={handleTogglePaid}
               onCancel={handleCancel}
@@ -686,7 +677,6 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
               bookings={grouped.future}
               selectMode={selectMode}
               selectedIds={selectedIds}
-              adminToken={adminToken}
               onToggleSelect={toggleSelect}
               onTogglePaid={handleTogglePaid}
               onCancel={handleCancel}

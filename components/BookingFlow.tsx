@@ -14,9 +14,10 @@ import BookingForm from './BookingForm'
 import ConfirmView from './ConfirmView'
 import SuccessView from './SuccessView'
 import BookingLookup from './BookingLookup'
-import type { BookingFormData, BookingFormErrors, SummaryData } from '@/types/booking'
+import type { BookingFormData, BookingFormErrors, SummaryData, PendingBookingEntry } from '@/types/booking'
 import { fetchBookedHours, submitBooking, SlotConflictError } from '@/lib/bookings'
-import { savePendingBooking, clearPendingBooking, getPendingBooking, type PendingBookingEntry } from '@/lib/pending-booking'
+import { savePendingBooking, clearPendingBooking, getPendingBooking } from '@/lib/pending-booking'
+import { pad, h12 } from '@/lib/utils'
 
 const H_START = 8
 const H_END = 22
@@ -56,9 +57,7 @@ function makeStepVariants(reduced: boolean | null): Variants {
   }
 }
 
-function pad(n: number) { return String(n).padStart(2, '0') }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
-function h12(h: number) { return `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}` }
 /** Converts +639XXXXXXXXX → 09XXXXXXXXX; passes 09XXXXXXXXX through unchanged. */
 function normalizePhone(raw: string): string {
   const t = raw.trim()

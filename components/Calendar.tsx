@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { pad } from '@/lib/utils'
 
 interface Props {
   year: number
@@ -21,8 +22,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
-
-function pad(n: number) { return String(n).padStart(2, '0') }
 
 export default function Calendar({
   year, month, today, maxDate, selectedDate, bookedMap, hStart, hEnd,

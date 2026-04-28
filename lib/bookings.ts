@@ -1,15 +1,5 @@
 import { supabase } from './supabase'
-
-export interface BookingPayload {
-  guestName: string
-  phone: string
-  email: string
-  date: string      // YYYY-MM-DD
-  startHour: number // 8–21  (integer)
-  duration: number  // 1–4   (integer)
-  totalPrice: number
-  gcashRef: string
-}
+import type { BookingPayload } from '@/types/booking'
 
 export class SlotConflictError extends Error {
   readonly code = 'SLOT_CONFLICT' as const

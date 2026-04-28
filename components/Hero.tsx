@@ -55,12 +55,14 @@ export default function Hero() {
 
   return (
     <section
-      className="relative flex flex-col min-h-dvh bg-[#006241] overflow-hidden"
+      className="relative flex flex-col min-h-[100svh] bg-[#006241]"
       aria-label="Hero"
     >
 
-      {/* ── Breathing grid background ── */}
-      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      {/* ── Decorative layer — overflow-hidden scoped here so it never clips text ── */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+
+        {/* Breathing grid background */}
         <div
           className="animate-grid-breathe w-full h-full"
           style={{
@@ -69,43 +71,39 @@ export default function Hero() {
             backgroundSize: '56px 56px',
           }}
         />
-      </div>
 
-      {/* ── Botanical sprig — top left ── */}
-      <div className="absolute top-0 left-0 pointer-events-none" aria-hidden="true">
-        <LeafSprig />
-      </div>
+        {/* Botanical sprig — top left */}
+        <div className="absolute top-0 left-0">
+          <LeafSprig />
+        </div>
 
-      {/* ── Botanical sprig — bottom right ── */}
-      <div
-        className="absolute bottom-0 right-0 pointer-events-none"
-        aria-hidden="true"
-        style={{ transform: 'rotate(180deg)' }}
-      >
-        <LeafSprig />
-      </div>
+        {/* Botanical sprig — bottom right */}
+        <div
+          className="absolute bottom-0 right-0"
+          style={{ transform: 'rotate(180deg)' }}
+        >
+          <LeafSprig />
+        </div>
 
-      {/* ── Stamp seal ── */}
-      <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] pointer-events-none"
-        aria-hidden="true"
-      >
-        <svg width="500" height="500" viewBox="0 0 500 500" fill="none">
-          <circle cx="250" cy="250" r="247" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
-          <circle cx="250" cy="250" r="222" stroke="rgba(255,255,255,0.05)" strokeWidth="0.75" strokeDasharray="4 9"/>
-          <circle cx="250" cy="250" r="197" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
-        </svg>
-      </div>
+        {/* Stamp seal */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%]">
+          <svg width="500" height="500" viewBox="0 0 500 500" fill="none">
+            <circle cx="250" cy="250" r="247" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
+            <circle cx="250" cy="250" r="222" stroke="rgba(255,255,255,0.05)" strokeWidth="0.75" strokeDasharray="4 9"/>
+            <circle cx="250" cy="250" r="197" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+          </svg>
+        </div>
 
-      {/* ── Top radial highlight ── */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255,255,255,0.06) 0%, transparent 70%)' }}
-        aria-hidden="true"
-      />
+        {/* Top radial highlight */}
+        <div
+          className="absolute inset-0"
+          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255,255,255,0.06) 0%, transparent 70%)' }}
+        />
+
+      </div>
 
       {/* ── Main content ── */}
-      <div className="relative z-10 flex flex-col items-center justify-center flex-1 text-center px-5 pt-16 pb-8 sm:pt-24 sm:pb-12">
+      <div className="relative z-10 flex flex-col items-center justify-center flex-1 text-center px-5 py-16 sm:py-24 gap-6">
 
         {/* Overline */}
         <motion.div
@@ -113,14 +111,13 @@ export default function Hero() {
           variants={item(0)}
           style={{ willChange: 'transform' }}
         >
-          <p className="text-[0.58rem] font-bold tracking-[0.35em] uppercase text-white/40 mb-6">
+          <p className="text-[0.58rem] font-bold tracking-[0.35em] uppercase text-white/40">
             Pickle Garden &nbsp;·&nbsp; Cebu
           </p>
         </motion.div>
 
         {/* Live availability badge */}
         <motion.div
-          className="mb-8"
           initial="hidden" animate="visible"
           variants={item(0.08)}
           style={{ willChange: 'transform' }}
@@ -135,7 +132,7 @@ export default function Hero() {
         </motion.div>
 
         {/* Headline */}
-        <h1 className="font-serif text-[clamp(2.8rem,8.5vw,5.8rem)] font-semibold leading-[1.06] tracking-tight max-w-3xl mx-auto mb-4">
+        <h1 className="font-serif text-[clamp(2.8rem,8.5vw,5.8rem)] font-semibold leading-[1.06] tracking-tight max-w-3xl mx-auto">
           <motion.div
             className="block overflow-hidden"
             initial="hidden" animate="visible"
@@ -156,7 +153,7 @@ export default function Hero() {
 
         {/* Diamond divider */}
         <motion.div
-          className="flex items-center gap-3 w-32 mx-auto mb-6"
+          className="flex items-center gap-3 w-32 mx-auto"
           initial="hidden" animate="visible"
           variants={item(0.35)}
           aria-hidden="true"
@@ -174,63 +171,64 @@ export default function Hero() {
           variants={item(0.42)}
           style={{ willChange: 'transform' }}
         >
-          <p className="text-white/60 text-base leading-relaxed max-w-[440px] mx-auto mb-10">
+          <p className="text-white/60 text-base leading-relaxed max-w-[440px] mx-auto">
             Reserve a premium pickleball court in minutes. No waiting, no calls — just show up and play.
           </p>
         </motion.div>
 
-        {/* CTA — off-white pill on dark green */}
-        <motion.div
-          initial="hidden" animate="visible"
-          variants={item(0.5)}
-          style={{ willChange: 'transform' }}
-        >
-          <motion.button
-            onClick={scrollToBook}
-            whileTap={prefersReduced ? undefined : { scale: 0.96 }}
-            transition={TAP_SPRING}
-            className="bg-[#FAF8F5] text-[#006241] font-semibold text-base px-10 py-4 rounded-full cursor-pointer
-              shadow-[0_4px_20px_rgba(0,0,0,0.2)]
-              transition-[background-color,box-shadow] duration-300 ease-out
-              hover:bg-white hover:shadow-[0_10px_36px_rgba(0,0,0,0.3)]
-              focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        {/* CTA + pricing assurance + social proof — grouped with tighter gap */}
+        <div className="flex flex-col items-center gap-3">
+
+          <motion.div
+            initial="hidden" animate="visible"
+            variants={item(0.5)}
+            style={{ willChange: 'transform' }}
           >
-            Book Your Court →
-          </motion.button>
-        </motion.div>
+            <motion.button
+              onClick={scrollToBook}
+              whileTap={prefersReduced ? undefined : { scale: 0.96 }}
+              transition={TAP_SPRING}
+              className="bg-[#FAF8F5] text-[#006241] font-semibold text-base px-10 py-4 rounded-full cursor-pointer
+                shadow-[0_4px_20px_rgba(0,0,0,0.2)]
+                transition-[background-color,box-shadow] duration-300 ease-out
+                hover:bg-white hover:shadow-[0_10px_36px_rgba(0,0,0,0.3)]
+                focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Book Your Court →
+            </motion.button>
+          </motion.div>
 
-        {/* Pricing assurance */}
-        <motion.div
-          className="mt-3"
-          initial="hidden" animate="visible"
-          variants={item(0.56)}
-          style={{ willChange: 'transform' }}
-        >
-          <p className="text-sm text-white/55 tracking-[0.02em]">
-            <span className="text-white/80 font-medium tabular-nums">₱300 / hr</span>
-            <span className="mx-2.5 text-white/20" aria-hidden="true">·</span>
-            No membership required
-          </p>
-        </motion.div>
+          <motion.div
+            initial="hidden" animate="visible"
+            variants={item(0.56)}
+            style={{ willChange: 'transform' }}
+          >
+            <p className="text-sm text-white/55 tracking-[0.02em]">
+              <span className="text-white/80 font-medium tabular-nums">₱300 / hr</span>
+              <span className="mx-2.5 text-white/20" aria-hidden="true">·</span>
+              No membership required
+            </p>
+          </motion.div>
 
-        {/* Social proof */}
-        <motion.div
-          className="mt-6 flex items-center justify-center gap-2.5"
-          initial="hidden" animate="visible"
-          variants={item(0.62)}
-          style={{ willChange: 'transform' }}
-        >
-          <div className="flex -space-x-1.5" aria-hidden="true">
-            {AVATAR_COLORS.map((c, i) => (
-              <div
-                key={i}
-                className="w-6 h-6 rounded-full border-2 border-[#006241]"
-                style={{ backgroundColor: c }}
-              />
-            ))}
-          </div>
-          <span className="text-white/50 text-xs">Trusted by players across Cebu</span>
-        </motion.div>
+          <motion.div
+            className="flex items-center justify-center gap-2.5"
+            initial="hidden" animate="visible"
+            variants={item(0.62)}
+            style={{ willChange: 'transform' }}
+          >
+            <div className="flex -space-x-1.5" aria-hidden="true">
+              {AVATAR_COLORS.map((c, i) => (
+                <div
+                  key={i}
+                  className="w-6 h-6 rounded-full border-2 border-[#006241]"
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+            <span className="text-white/50 text-xs">Trusted by players across Cebu</span>
+          </motion.div>
+
+        </div>
 
       </div>
 

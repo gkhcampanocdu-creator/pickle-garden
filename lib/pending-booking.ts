@@ -1,17 +1,7 @@
+import type { PendingBookingEntry } from '@/types/booking'
+
 const STORAGE_KEY = 'pg_pending_booking'
 const TTL_MS = 30 * 60 * 1000 // 30 minutes
-
-export interface PendingBookingEntry {
-  bookingDate: string   // YYYY-MM-DD
-  startHour: number
-  duration: number
-  totalPrice: number
-  guestName: string
-  phone: string
-  email: string
-  gcashRef: string
-  savedAt: number       // Date.now() timestamp
-}
 
 export function savePendingBooking(entry: Omit<PendingBookingEntry, 'savedAt'>): void {
   try {

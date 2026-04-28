@@ -1,6 +1,7 @@
 'use client'
 
 import { CalendarSearch } from 'lucide-react'
+import { h12 } from '@/lib/utils'
 
 interface Props {
   selectedDate: string | null
@@ -12,10 +13,6 @@ interface Props {
   hEnd: number
   today: string
   onPickHour: (h: number) => void
-}
-
-function h12(h: number): string {
-  return `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`
 }
 
 /**

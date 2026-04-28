@@ -1,19 +1,7 @@
 import { supabase } from './supabase'
+import type { AdminBooking } from '@/types/booking'
 
-export interface AdminBooking {
-  id: string
-  guest_name: string
-  phone: string
-  email: string
-  booking_date: string  // YYYY-MM-DD
-  start_hour: number
-  duration: number
-  total_price: number
-  gcash_ref: string
-  is_paid: boolean
-  status: string
-  created_at: string
-}
+export type { AdminBooking }
 
 function todayStr() {
   const d = new Date()
