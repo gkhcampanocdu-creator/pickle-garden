@@ -128,6 +128,31 @@ function SummaryBox({ summary }: { summary: SummaryData }) {
   )
 }
 
+function ScarcityBadge({ count, prefersReduced }: { count: number; prefersReduced: boolean }) {
+  const isFullyBooked = count === 0
+  const label = isFullyBooked
+    ? 'Fully Booked'
+    : count === 1
+    ? 'Only 1 spot remaining! Book now.'
+    : `Filling up fast! Only ${count} slots left.`
+
+  return (
+    <motion.span
+      key={count}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className={[
+        'inline-flex items-center text-white text-[0.65rem] font-bold px-2.5 py-1 rounded-full whitespace-nowrap leading-none',
+        isFullyBooked ? 'bg-red-600' : 'bg-orange-500',
+        !isFullyBooked && !prefersReduced ? 'animate-scarcity-pulse' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {label}
+    </motion.span>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function BookingFlow() {
@@ -376,6 +401,16 @@ export default function BookingFlow() {
   }
 
   const bookedHours = selectedDate ? (bookedMap[selectedDate] ?? []) : []
+
+  const availableCount: number | null = (() => {
+    if (!selectedDate || loadingSlots) return null
+    const isSelectedToday = selectedDate === todayStr
+    const nowHour = new Date().getHours()
+    return Array.from({ length: H_END - H_START }, (_, i) => H_START + i)
+      .filter(h => !(isSelectedToday && h <= nowHour) && !bookedHours.includes(h))
+      .length
+  })()
+
   const canContinue = selectedDate !== null && selectedSlots.length === duration
 
   const summaryData: SummaryData = {
@@ -493,7 +528,12 @@ export default function BookingFlow() {
 
                   <Divider />
 
-                  <SectionTitle>Choose a Time Slot</SectionTitle>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <h2 className="font-serif text-base font-semibold text-stone-900">Choose a Time Slot</h2>
+                    {availableCount !== null && availableCount <= 3 && (
+                      <ScarcityBadge count={availableCount} prefersReduced={!!prefersReduced} />
+                    )}
+                  </div>
                   <TimeSlots
                     selectedDate={selectedDate}
                     selectedSlots={selectedSlots}

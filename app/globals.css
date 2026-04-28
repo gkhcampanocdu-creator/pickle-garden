@@ -153,6 +153,17 @@ body {
   to   { opacity: 1; }
 }
 
+/* ── Scarcity badge: urgency glow ring ──────────────────────────── */
+.animate-scarcity-pulse {
+  animation: scarcity-pulse 1.8s ease-out infinite;
+}
+
+@keyframes scarcity-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(234, 88, 12, 0.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(234, 88, 12, 0);    }
+  100% { box-shadow: 0 0 0 0   rgba(234, 88, 12, 0);    }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-pop-in,
@@ -165,7 +176,8 @@ body {
   .animate-badge-float,
   .animate-grid-breathe,
   .animate-modal-enter,
-  .animate-backdrop-enter {
+  .animate-backdrop-enter,
+  .animate-scarcity-pulse {
     animation: none;
   }
 }
