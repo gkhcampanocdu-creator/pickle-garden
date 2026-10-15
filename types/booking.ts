@@ -23,13 +23,14 @@ export interface SummaryData {
   phone: string
 }
 
+/** Sent to POST /api/bookings. The server computes the price. */
 export interface BookingPayload {
-  guestName: string
+  firstName: string
+  lastName: string
   phone: string
   email: string
-  date: string           // YYYY-MM-DD
-  selectedHours: number[] // individual hour slots chosen by the user
-  totalPrice: number
+  date: string     // YYYY-MM-DD
+  hours: number[]  // individual hour slots chosen by the user
   gcashRef: string
 }
 

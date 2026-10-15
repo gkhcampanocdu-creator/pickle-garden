@@ -11,6 +11,8 @@ interface Props {
   hStart: number
   hEnd: number
   today: string
+  /** Current hour at the court (Asia/Manila), not the device clock */
+  nowHour: number
   onToggleSlot: (h: number) => void
 }
 
@@ -22,7 +24,7 @@ const LEGEND = [
 
 export default function TimeSlots({
   selectedDate, selectedSlots, bookedHours,
-  loading, hStart, hEnd, today, onToggleSlot,
+  loading, hStart, hEnd, today, nowHour, onToggleSlot,
 }: Props) {
   if (!selectedDate) {
     return (
@@ -44,7 +46,7 @@ export default function TimeSlots({
   }
 
   const isToday = selectedDate === today
-  const currentHour = new Date().getHours()
+  const currentHour = nowHour
 
   return (
     <>

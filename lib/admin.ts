@@ -1,56 +1,67 @@
-import { supabase } from './supabase'
 import type { AdminBooking } from '@/types/booking'
 
 export type { AdminBooking }
 
-function todayStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+/**
+ * Browser-side admin helpers. Every call goes to the site's own API routes, which
+ * check the signed, httpOnly admin session cookie. No password or token is kept in
+ * the browser, and the browser never talks to Supabase directly.
+ */
 
-/** Fetches all bookings from today onward, sorted by date then start_hour. */
-export async function fetchAllBookings(): Promise<AdminBooking[]> {
-  try {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .gte('booking_date', todayStr())
-      .neq('status', 'cancelled')
-      .order('booking_date', { ascending: true })
-      .order('start_hour', { ascending: true })
-
-    if (error) throw error
-    return data ?? []
-  } catch (err) {
-    console.error('[admin] fetchAllBookings error:', err)
-    throw err
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Admin session expired. Please sign in again.')
+    this.name = 'UnauthorizedError'
   }
 }
 
-// Writes go through server-side API routes (bypasses RLS with service role key).
-// The adminToken is the admin password, verified server-side against ADMIN_PASSWORD.
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { cache: 'no-store', ...init })
+  if (res.status === 401) throw new UnauthorizedError()
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string }
+  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`)
+  return body
+}
 
-async function adminPost(path: string, body: object, adminToken: string): Promise<void> {
-  const res = await fetch(path, {
+function post<T>(path: string, body?: object) {
+  return call<T>(path, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-token': adminToken,
-    },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`)
-  }
 }
 
-/** Flips the is_paid flag for a single booking. */
-export async function updatePaymentStatus(id: string, isPaid: boolean, adminToken: string): Promise<void> {
-  await adminPost('/api/admin/update-payment', { id, isPaid }, adminToken)
+export async function checkSession(): Promise<boolean> {
+  return (await call<{ authed: boolean }>('/api/admin-auth')).authed
 }
 
-/** Soft-deletes a booking by setting status = 'cancelled'. */
-export async function cancelBooking(id: string, adminToken: string): Promise<void> {
-  await adminPost('/api/admin/cancel', { id }, adminToken)
+/** Signs in. Resolves to an error message, or null on success. */
+export async function signIn(password: string): Promise<string | null> {
+  const res = await fetch('/api/admin-auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  if (res.ok) return null
+  const body = (await res.json().catch(() => ({}))) as { error?: string }
+  if (res.status === 401) return 'Incorrect password. Please try again.'
+  return body.error ?? 'Could not sign in. Please try again.'
+}
+
+export async function signOut(): Promise<void> {
+  await fetch('/api/admin-auth', { method: 'DELETE' })
+}
+
+/** Bookings from the court's today onward, plus the court's date for today (Asia/Manila). */
+export async function fetchAllBookings(): Promise<{ bookings: AdminBooking[]; today: string }> {
+  return call('/api/admin/bookings')
+}
+
+export async function updatePaymentStatus(id: string, isPaid: boolean): Promise<void> {
+  await post('/api/admin/update-payment', { id, isPaid })
+}
+
+/** Soft-deletes a booking row by setting status = 'cancelled'. */
+export async function cancelBooking(id: string): Promise<void> {
+  await post('/api/admin/cancel', { id })
 }

@@ -1,5 +1,10 @@
-import { supabase } from './supabase'
 import type { BookingPayload } from '@/types/booking'
+import type { BookingErrors } from './booking-rules'
+
+/**
+ * Browser-side helpers. The browser never talks to Supabase directly — these call
+ * the site's own API routes, which validate everything on the server.
+ */
 
 export class SlotConflictError extends Error {
   readonly code = 'SLOT_CONFLICT' as const
@@ -9,119 +14,39 @@ export class SlotConflictError extends Error {
   }
 }
 
-/** Returns every occupied hour number for a given date (e.g. [10, 11] for a 2h booking at 10). */
-export async function fetchBookedHours(date: string): Promise<number[]> {
-  try {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('start_hour, duration')
-      .eq('booking_date', date)
-      .neq('status', 'cancelled')
-
-    if (error) throw error
-
-    const occupied: number[] = []
-    for (const row of data ?? []) {
-      for (let h = row.start_hour; h < row.start_hour + row.duration; h++) {
-        occupied.push(h)
-      }
-    }
-    return occupied
-  } catch (err) {
-    console.error('[bookings] fetchBookedHours error:', err)
-    throw err
+export class DuplicateRefError extends Error {
+  constructor() {
+    super('That GCash reference number was already used for another booking.')
+    this.name = 'DuplicateRefError'
   }
 }
 
-/**
- * Submits a booking via the atomic `create_booking` Supabase RPC.
- * The RPC acquires a pg_advisory_xact_lock per date so the conflict check
- * and INSERT are serialised — eliminating the race window entirely.
- *
- * Falls back to the legacy manual check+insert path if the RPC doesn't exist
- * yet (PGRST202 = function not found), so the app stays functional before the
- * migration has been applied.
- *
- * Throws SlotConflictError if the slot is taken.
- * Returns the booking reference string on success.
- */
+export class BookingValidationError extends Error {
+  constructor(readonly fieldErrors: BookingErrors) {
+    super('Some booking details are not valid.')
+    this.name = 'BookingValidationError'
+  }
+}
+
+/** Returns every booked hour for a date (e.g. [10, 11]). */
+export async function fetchBookedHours(date: string): Promise<number[]> {
+  const res = await fetch(`/api/availability?date=${encodeURIComponent(date)}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Availability request failed (${res.status})`)
+  const body = (await res.json()) as { bookedHours: number[] }
+  return body.bookedHours
+}
+
+/** Submits a booking. Returns the booking reference (e.g. "#PB1A2B3C"). */
 export async function submitBooking(payload: BookingPayload): Promise<string> {
-  const pricePerSlot = Math.round(payload.totalPrice / payload.selectedHours.length)
-
-  // Probe the first slot via RPC to detect whether the function exists.
-  const [firstHour, ...restHours] = payload.selectedHours
-  const { data: firstData, error: firstError } = await supabase.rpc('create_booking', {
-    p_guest_name:   payload.guestName,
-    p_phone:        payload.phone,
-    p_email:        payload.email,
-    p_booking_date: payload.date,
-    p_start_hour:   firstHour,
-    p_duration:     1,
-    p_total_price:  pricePerSlot,
-    p_gcash_ref:    payload.gcashRef,
+  const res = await fetch('/api/bookings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
-
-  if (firstError?.message?.includes('SLOT_CONFLICT')) throw new SlotConflictError()
-
-  // PGRST202 = RPC not found — fall back to legacy path for ALL slots
-  if (firstError?.code === 'PGRST202') {
-    console.warn('[bookings] create_booking RPC not found, falling back to manual insert')
-    const bookedHours = await fetchBookedHours(payload.date)
-    for (const h of payload.selectedHours) {
-      if (bookedHours.includes(h)) throw new SlotConflictError()
-    }
-    let firstRef: string | null = null
-    for (const hour of payload.selectedHours) {
-      try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .insert({
-            guest_name:   payload.guestName,
-            phone:        payload.phone,
-            email:        payload.email,
-            booking_date: payload.date,
-            start_hour:   hour,
-            duration:     1,
-            total_price:  pricePerSlot,
-            gcash_ref:    payload.gcashRef,
-          })
-          .select('id')
-          .single()
-        if (error) {
-          if (error.code === '23505') throw new SlotConflictError()
-          throw error
-        }
-        if (!firstRef) firstRef = `#PB${(data.id as string).slice(0, 6).toUpperCase()}`
-      } catch (err) {
-        if (err instanceof SlotConflictError) throw err
-        console.error('[bookings] submitBooking fallback error:', err)
-        throw err
-      }
-    }
-    return firstRef!
-  }
-
-  if (firstError) {
-    console.error('[bookings] RPC error:', firstError)
-    throw firstError
-  }
-
-  // RPC exists — submit remaining slots the same way
-  const firstRef = `#PB${(firstData as string).slice(0, 6).toUpperCase()}`
-  for (const hour of restHours) {
-    const { error } = await supabase.rpc('create_booking', {
-      p_guest_name:   payload.guestName,
-      p_phone:        payload.phone,
-      p_email:        payload.email,
-      p_booking_date: payload.date,
-      p_start_hour:   hour,
-      p_duration:     1,
-      p_total_price:  pricePerSlot,
-      p_gcash_ref:    payload.gcashRef,
-    })
-    if (error?.message?.includes('SLOT_CONFLICT')) throw new SlotConflictError()
-    if (error) throw error
-  }
-
-  return firstRef
+  const body = (await res.json().catch(() => ({}))) as { ref?: string; error?: string; fieldErrors?: BookingErrors }
+  if (res.ok && body.ref) return body.ref
+  if (body.error === 'conflict') throw new SlotConflictError()
+  if (body.error === 'duplicate_ref') throw new DuplicateRefError()
+  if (body.error === 'invalid') throw new BookingValidationError(body.fieldErrors ?? {})
+  throw new Error(body.error ?? `Booking failed (${res.status})`)
 }

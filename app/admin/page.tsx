@@ -2,39 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, LogOut, CalendarX2, Copy, Check, Download, Search, Trash2, CheckSquare, Square } from 'lucide-react'
-import { fetchAllBookings, updatePaymentStatus, cancelBooking } from '@/lib/admin'
+import {
+  fetchAllBookings, updatePaymentStatus, cancelBooking, checkSession, signIn, signOut, UnauthorizedError,
+} from '@/lib/admin'
 import type { AdminBooking } from '@/types/booking'
-import { pad, h12 } from '@/lib/utils'
+import { h12, courtNow, addDays } from '@/lib/booking-rules'
 
-const SESSION_KEY = 'pg_admin_auth'
-const SESSION_TTL = 24 * 60 * 60 * 1000 // 24 hours
-
-function getStoredToken(): string | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    const { at, token } = JSON.parse(raw) as { at: number; token: string }
-    if (!token || Date.now() - at > SESSION_TTL) {
-      localStorage.removeItem(SESSION_KEY)
-      return null
-    }
-    return token
-  } catch {
-    return null
-  }
-}
-
-function storeSession(token: string) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ at: Date.now(), token }))
-}
+/** Older versions stored the admin password here in plain text; remove it from this browser. */
+const LEGACY_SESSION_KEY = 'pg_admin_auth'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-function getDateStr(offset = 0) {
-  const d = new Date()
-  d.setDate(d.getDate() + offset)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
 function shortDate(s: string) {
   const [, m, d] = s.split('-')
   return `${MONTHS[+m - 1]} ${+d}`
@@ -57,13 +34,13 @@ function exportCSV(data: AdminBooking[]) {
   ]
   const csv = rows.map(r => r.join(',')).join('\n')
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }))
-  Object.assign(document.createElement('a'), { href: url, download: `bookings-${getDateStr()}.csv` }).click()
+  Object.assign(document.createElement('a'), { href: url, download: `bookings-${courtNow().dateStr}.csv` }).click()
   URL.revokeObjectURL(url)
 }
 
 // ── Password Gate ─────────────────────────────────────────────────────────────
 
-function PasswordGate({ onAuth }: { onAuth: (password: string) => void }) {
+function PasswordGate({ onAuth }: { onAuth: () => void }) {
   const [pw, setPw] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [shake, setShake] = useState(false)
@@ -72,23 +49,13 @@ function PasswordGate({ onAuth }: { onAuth: (password: string) => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const res = await fetch('/api/admin-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
-    })
+    const failure = await signIn(pw).catch(() => 'Could not reach the server. Please try again.')
     setLoading(false)
 
-    if (res.ok) {
-      storeSession(pw)
-      onAuth(pw)
+    if (!failure) {
+      onAuth()
     } else {
-      const body = await res.json().catch(() => ({}))
-      setError(
-        res.status === 429
-          ? (body.error ?? 'Too many attempts. Try again in 5 minutes.')
-          : 'Incorrect password. Please try again.'
-      )
+      setError(failure)
       setShake(true)
       setTimeout(() => setShake(false), 450)
     }
@@ -379,7 +346,7 @@ function Skeleton() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken: string }) {
+function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [bookings, setBookings] = useState<AdminBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -389,24 +356,34 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [notice, setNotice] = useState<string | null>(null)
+  // The court's date (Asia/Manila), as reported by the server
+  const [TODAY, setToday] = useState('')
+  const TOMORROW = TODAY ? addDays(TODAY, 1) : ''
 
-  const TODAY = getDateStr(0)
-  const TOMORROW = getDateStr(1)
+  /** Shows a failure; an expired session sends the admin back to the sign-in screen. */
+  const fail = useCallback((err: unknown, message: string) => {
+    if (err instanceof UnauthorizedError) onLogout()
+    else setNotice(message)
+  }, [onLogout])
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     setError(null)
     try {
-      setBookings(await fetchAllBookings())
+      const { bookings, today } = await fetchAllBookings()
+      setBookings(bookings)
+      setToday(today)
       setLastRefreshed(new Date())
-    } catch {
-      setError('Could not load bookings. Check your connection and try again.')
+    } catch (err) {
+      if (err instanceof UnauthorizedError) onLogout()
+      else setError('Could not load bookings. Check your connection and try again.')
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [onLogout])
 
   useEffect(() => { load() }, [load])
 
@@ -433,9 +410,10 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
     setSelectedIds(new Set())
     setSelectMode(false)
     try {
-      await Promise.all(ids.map(id => updatePaymentStatus(id, true, adminToken)))
-    } catch {
-      load()
+      await Promise.all(ids.map(id => updatePaymentStatus(id, true)))
+    } catch (err) {
+      fail(err, 'Some bookings could not be marked as paid. The list has been refreshed.')
+      load(true)
     }
   }
 
@@ -446,27 +424,30 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
     setSelectedIds(new Set())
     setSelectMode(false)
     try {
-      await Promise.all(ids.map(id => cancelBooking(id, adminToken)))
-    } catch {
-      load()
+      await Promise.all(ids.map(id => cancelBooking(id)))
+    } catch (err) {
+      fail(err, 'Some bookings could not be cancelled. The list has been refreshed.')
+      load(true)
     }
   }
 
   async function handleTogglePaid(id: string, newVal: boolean) {
     setBookings(prev => prev.map(b => b.id === id ? { ...b, is_paid: newVal } : b))
     try {
-      await updatePaymentStatus(id, newVal, adminToken)
-    } catch {
+      await updatePaymentStatus(id, newVal)
+    } catch (err) {
       setBookings(prev => prev.map(b => b.id === id ? { ...b, is_paid: !newVal } : b))
+      fail(err, 'Could not update payment status. Please try again.')
     }
   }
 
   async function handleCancel(id: string) {
     setBookings(prev => prev.filter(b => b.id !== id))
     try {
-      await cancelBooking(id, adminToken)
-    } catch {
-      load()
+      await cancelBooking(id)
+    } catch (err) {
+      fail(err, 'Could not cancel the booking. The list has been refreshed.')
+      load(true)
     }
   }
 
@@ -564,6 +545,15 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
               placeholder="Search by guest name…"
               className="w-full pl-10 pr-4 py-3 text-sm border border-stone-200 rounded-xl bg-white text-stone-900 placeholder:text-stone-400 outline-none focus:border-[#006241] focus:ring-2 focus:ring-[#006241]/15 transition-all duration-200"
             />
+          </div>
+        )}
+
+        {notice && (
+          <div role="alert" className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <p className="flex-1 text-sm text-red-700">{notice}</p>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="text-xs font-semibold text-red-500 cursor-pointer">
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -724,32 +714,20 @@ function Dashboard({ onLogout, adminToken }: { onLogout: () => void; adminToken:
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState<boolean | null>(null)
-  const [adminToken, setAdminToken] = useState('')
 
   useEffect(() => {
-    const token = getStoredToken()
-    if (token) {
-      setAdminToken(token)
-      setAuthed(true)
-    } else {
-      setAuthed(false)
-    }
+    try { localStorage.removeItem(LEGACY_SESSION_KEY) } catch { /* storage unavailable */ }
+    checkSession().then(setAuthed).catch(() => setAuthed(false))
   }, [])
 
-  function handleAuth(password: string) {
-    setAdminToken(password)
-    setAuthed(true)
-  }
-
-  function handleLogout() {
-    localStorage.removeItem(SESSION_KEY)
-    setAdminToken('')
+  const handleLogout = useCallback(() => {
+    signOut().catch(() => { /* cookie expires on its own */ })
     setAuthed(false)
-  }
+  }, [])
 
   if (authed === null) return null
 
   return authed
-    ? <Dashboard onLogout={handleLogout} adminToken={adminToken} />
-    : <PasswordGate onAuth={handleAuth} />
+    ? <Dashboard onLogout={handleLogout} />
+    : <PasswordGate onAuth={() => setAuthed(true)} />
 }

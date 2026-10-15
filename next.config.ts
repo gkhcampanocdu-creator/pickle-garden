@@ -1,10 +1,5 @@
 import type { NextConfig } from "next";
 
-// Domains allowed to receive fetch/WebSocket connections from the browser.
-const SUPABASE_HOST = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
-  : '*.supabase.co'
-
 const isDev = process.env.NODE_ENV === 'development'
 
 const ContentSecurityPolicy = `
@@ -13,7 +8,7 @@ const ContentSecurityPolicy = `
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https:;
   font-src 'self' data:;
-  connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} https://api.resend.com;
+  connect-src 'self';
   frame-src https://www.google.com https://maps.google.com;
   object-src 'none';
   base-uri 'self';

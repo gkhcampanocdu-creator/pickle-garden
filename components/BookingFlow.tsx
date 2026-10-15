@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Activity, Wifi,
   CalendarDays, Clock, Timer, Banknote, AlertTriangle,
@@ -15,24 +15,25 @@ import ConfirmView from './ConfirmView'
 import SuccessView from './SuccessView'
 import BookingLookup from './BookingLookup'
 import type { BookingFormData, BookingFormErrors, SummaryData, PendingBookingEntry } from '@/types/booking'
-import { fetchBookedHours, submitBooking, SlotConflictError } from '@/lib/bookings'
+import {
+  fetchBookedHours, submitBooking, SlotConflictError, DuplicateRefError, BookingValidationError,
+} from '@/lib/bookings'
 import { savePendingBooking, clearPendingBooking, getPendingBooking } from '@/lib/pending-booking'
-import { pad, h12 } from '@/lib/utils'
+import {
+  H_START, H_END, MAX_ADVANCE_DAYS, PRICE_PER_HOUR, priceFor, courtNow, addDays, humanDate,
+  normalizePhone, validateContact, h12, type CourtNow,
+} from '@/lib/booking-rules'
 
-const H_START = 8
-const H_END = 21
-const PRICE_PER_HOUR = parseInt(process.env.NEXT_PUBLIC_PRICE_PER_HOUR ?? '300', 10)
-function calcPrice(hrs: number): number {
-  return hrs === 4 ? 1000 : hrs * PRICE_PER_HOUR
-}
-const MAX_ADVANCE_DAYS = 60
+const CLOCK_TICK_MS = 60_000
+const AVAILABILITY_POLL_MS = 30_000
+const TOAST_MS = 5500
 
 const SHADOW = 'shadow-[0_4px_24px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.04)]'
 
 const AMENITIES = [
   { Icon: Activity, label: 'Pickleball Court' },
   { Icon: Wifi, label: 'Free Wi-Fi' },
-  { Icon: Banknote, label: '₱300 / hour' },
+  { Icon: Banknote, label: `₱${PRICE_PER_HOUR} / hour` },
 ]
 
 const TAP_SPRING = { type: 'spring' as const, stiffness: 600, damping: 25 }
@@ -58,19 +59,6 @@ function makeStepVariants(reduced: boolean | null): Variants {
       transition: { duration: 0.18, ease: [0.4, 0, 1, 1] as [number, number, number, number] },
     }),
   }
-}
-
-function toDateStr(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
-/** Converts +639XXXXXXXXX → 09XXXXXXXXX; passes 09XXXXXXXXX through unchanged. */
-function normalizePhone(raw: string): string {
-  const t = raw.trim()
-  if (/^\+639\d{9}$/.test(t)) return '0' + t.slice(2)
-  return t
-}
-function humanDate(s: string) {
-  const [, m, d] = s.split('-')
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return `${months[+m - 1]} ${+d}, ${s.split('-')[0]}`
 }
 
 // ── Small layout helpers ──────────────────────────────────────────────────────
@@ -159,16 +147,15 @@ export default function BookingFlow() {
   const sectionRef = useRef<HTMLDivElement>(null)
   const isFirstRender = useRef(true)
   const prefersReduced = useReducedMotion()
-  const now = new Date()
-  const todayStr = toDateStr(now)
-  const maxDate = new Date(now)
-  maxDate.setDate(now.getDate() + MAX_ADVANCE_DAYS)
-  const maxDateStr = toDateStr(maxDate)
+  // "Now" is the court's (Asia/Manila) date and hour, read after mount so server and browser render the same HTML
+  const [now, setNow] = useState<CourtNow | null>(null)
+  const todayStr = now?.dateStr ?? ''
+  const maxDateStr = now ? addDays(now.dateStr, MAX_ADVANCE_DAYS) : ''
 
   const [step, setStep] = useState<1 | 2 | 3 | 'success'>(1)
   const [direction, setDirection] = useState(1)
-  const [calYear, setCalYear] = useState(now.getFullYear())
-  const [calMonth, setCalMonth] = useState(now.getMonth())
+  const [calYear, setCalYear] = useState(0)
+  const [calMonth, setCalMonth] = useState(0)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlots, setSelectedSlots] = useState<number[]>([])
   const [duration, setDuration] = useState(1)
@@ -185,6 +172,20 @@ export default function BookingFlow() {
   const [lookupOpen, setLookupOpen] = useState(false)
   const isSubmittingRef = useRef(false)
   const [pendingBooking, setPendingBooking] = useState<PendingBookingEntry | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestDate = useRef<string | null>(null)
+
+  useEffect(() => {
+    const first = courtNow()
+    const [y, m] = first.dateStr.split('-').map(Number)
+    setNow(first)
+    setCalYear(y)
+    setCalMonth(m - 1)
+    const id = setInterval(() => setNow(courtNow()), CLOCK_TICK_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
@@ -196,10 +197,45 @@ export default function BookingFlow() {
     if (pending) setPendingBooking(pending)
   }, [])
 
-  function showToast(message: string, type: 'success' | 'error' = 'success') {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast({ message, type })
-    setTimeout(() => setToast(null), 5500)
-  }
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
+  }, [])
+
+  /** Loads booked hours for a date; only the most recently picked date controls the spinner. */
+  const loadAvailability = useCallback(async (dateStr: string, { quiet = false } = {}) => {
+    if (!quiet) setLoadingSlots(true)
+    try {
+      const hours = await fetchBookedHours(dateStr)
+      setBookedMap(prev => ({ ...prev, [dateStr]: hours }))
+    } catch {
+      if (!quiet) showToast('Could not load availability. Please try again.', 'error')
+    } finally {
+      if (!quiet && latestDate.current === dateStr) setLoadingSlots(false)
+    }
+  }, [showToast])
+
+  // Keep the visible date fresh while the guest is choosing slots
+  useEffect(() => {
+    if (step !== 1 || !selectedDate) return
+    const id = setInterval(() => { loadAvailability(selectedDate, { quiet: true }) }, AVAILABILITY_POLL_MS)
+    return () => clearInterval(id)
+  }, [step, selectedDate, loadAvailability])
+
+  // Drop chosen hours that have started (court clock) or were just booked by someone else
+  const bookedHours = selectedDate ? (bookedMap[selectedDate] ?? []) : []
+  const lostSlots = step === 'success' || !now || !selectedDate
+    ? []
+    : selectedSlots.filter(h => (selectedDate === now.dateStr && h <= now.hour) || bookedHours.includes(h))
+  const lostKey = lostSlots.join(',')
+  useEffect(() => {
+    if (!lostKey) return
+    const lost = lostKey.split(',').map(Number)
+    setSelectedSlots(prev => prev.filter(h => !lost.includes(h)))
+    showToast(`${lost.map(h12).join(', ')} is no longer available. Please pick again.`, 'error')
+    if (step === 2 || step === 3) { setDirection(-1); setStep(1) }
+  }, [lostKey, step, showToast])
 
   function prevMonth() {
     if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) }
@@ -211,18 +247,11 @@ export default function BookingFlow() {
     else setCalMonth(m => m + 1)
   }
 
-  async function handlePickDate(dateStr: string) {
+  function handlePickDate(dateStr: string) {
+    latestDate.current = dateStr
     setSelectedDate(dateStr)
     setSelectedSlots([])
-    setLoadingSlots(true)
-    try {
-      const hours = await fetchBookedHours(dateStr)
-      setBookedMap(prev => ({ ...prev, [dateStr]: hours }))
-    } catch {
-      showToast('Could not load availability. Please try again.', 'error')
-    } finally {
-      setLoadingSlots(false)
-    }
+    loadAvailability(dateStr)
   }
 
   function handleSetDuration(d: number) {
@@ -240,12 +269,7 @@ export default function BookingFlow() {
   }
 
   function validateForm(): boolean {
-    const errors: BookingFormErrors = {}
-    if (!formData.firstName.trim()) errors.firstName = 'Required'
-    if (!formData.lastName.trim()) errors.lastName = 'Required'
-    if (!/^09\d{9}$/.test(normalizePhone(formData.phone))) errors.phone = 'Use format: 09171234567 or +639171234567'
-    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()))
-      errors.email = 'Enter a valid email address'
+    const errors: BookingFormErrors = validateContact(formData)
     if (!formData.consent) errors.consent = 'You must agree to data processing to continue'
     setFormErrors(errors)
     return Object.keys(errors).length === 0
@@ -288,11 +312,8 @@ export default function BookingFlow() {
     setSelectedSlots(entry.selectedHours)
     setDuration(entry.selectedHours.length)
     setGcashRef(entry.gcashRef)
-    setLoadingSlots(true)
-    fetchBookedHours(entry.bookingDate)
-      .then(hours => setBookedMap(prev => ({ ...prev, [entry.bookingDate]: hours })))
-      .catch(() => {})
-      .finally(() => setLoadingSlots(false))
+    latestDate.current = entry.bookingDate
+    loadAvailability(entry.bookingDate, { quiet: true })
     setDirection(1)
     setStep(3)
   }
@@ -313,28 +334,28 @@ export default function BookingFlow() {
     }
 
     setSubmitting(true)
-    const guestName = [formData.firstName, formData.lastName].join(' ').trim()
+    const guestName = [formData.firstName.trim(), formData.lastName.trim()].join(' ')
     const normalizedPhone = normalizePhone(formData.phone)
-    const totalPrice = calcPrice(selectedSlots.length)
 
     savePendingBooking({
       bookingDate: selectedDate,
       selectedHours: selectedSlots,
-      totalPrice,
+      totalPrice: priceFor(selectedSlots.length),
       guestName,
       phone: normalizedPhone,
-      email: formData.email,
+      email: formData.email.trim(),
       gcashRef,
     })
 
     try {
+      // The server validates everything, computes the price and sends the confirmation email
       const ref = await submitBooking({
-        guestName,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         phone: normalizedPhone,
-        email: formData.email,
+        email: formData.email.trim(),
         date: selectedDate,
-        selectedHours: selectedSlots,
-        totalPrice,
+        hours: selectedSlots,
         gcashRef,
       })
       clearPendingBooking()
@@ -342,24 +363,6 @@ export default function BookingFlow() {
       setBookingRef(ref)
       setDirection(1)
       setStep('success')
-
-      // Fire-and-forget confirmation email — never blocks the success screen
-      if (formData.email) {
-        fetch('/api/send-confirmation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: formData.email,
-            guestName,
-            bookingRef: ref,
-            date: humanDate(selectedDate),
-            time: [...selectedSlots].sort((a, b) => a - b).map(h12).join(', '),
-            duration: `${selectedSlots.length} hour${selectedSlots.length > 1 ? 's' : ''}`,
-            price: `₱${totalPrice.toLocaleString()}`,
-            gcashRef,
-          }),
-        }).catch(() => {/* silent — booking is already confirmed */})
-      }
     } catch (err) {
       if (err instanceof SlotConflictError) {
         clearPendingBooking()
@@ -367,15 +370,27 @@ export default function BookingFlow() {
         showToast('That slot was just taken — availability has been refreshed.', 'error')
         setSelectedSlots([])
         setSlotConflict(true)
-        setLoadingSlots(true)
-        try {
-          const hours = await fetchBookedHours(selectedDate)
-          setBookedMap(prev => ({ ...prev, [selectedDate]: hours }))
-        } finally {
-          setLoadingSlots(false)
-        }
         setDirection(-1)
         setStep(1)
+        await loadAvailability(selectedDate)
+      } else if (err instanceof DuplicateRefError) {
+        setGcashRefError('This reference number was already used for another booking')
+        showToast('That GCash reference was already used.', 'error')
+      } else if (err instanceof BookingValidationError) {
+        const fe = err.fieldErrors
+        if (fe.date || fe.time) {
+          showToast(fe.time ?? fe.date ?? 'Please pick another time.', 'error')
+          setSelectedSlots([])
+          setDirection(-1)
+          setStep(1)
+          await loadAvailability(selectedDate)
+        } else if (fe.gcashRef) {
+          setGcashRefError(fe.gcashRef)
+        } else {
+          setFormErrors(fe)
+          goBackToDetails()
+          showToast('Please check your details.', 'error')
+        }
       } else {
         showToast('Something went wrong. Please try again.', 'error')
       }
@@ -384,6 +399,8 @@ export default function BookingFlow() {
       isSubmittingRef.current = false
     }
   }
+
+  function goBackToDetails() { setDirection(-1); setStep(2) }
 
   function handleReset() {
     setDirection(-1)
@@ -400,12 +417,10 @@ export default function BookingFlow() {
     setSlotConflict(false)
   }
 
-  const bookedHours = selectedDate ? (bookedMap[selectedDate] ?? []) : []
-
   const availableCount: number | null = (() => {
-    if (!selectedDate || loadingSlots) return null
+    if (!selectedDate || loadingSlots || !now) return null
     const isSelectedToday = selectedDate === todayStr
-    const nowHour = new Date().getHours()
+    const nowHour = now.hour
     return Array.from({ length: H_END - H_START }, (_, i) => H_START + i)
       .filter(h => !(isSelectedToday && h <= nowHour) && !bookedHours.includes(h))
       .length
@@ -417,7 +432,7 @@ export default function BookingFlow() {
     date: selectedDate ? humanDate(selectedDate) : '—',
     time: selectedSlots.length > 0 ? [...selectedSlots].sort((a, b) => a - b).map(h12).join(' · ') : '—',
     duration: `${duration} hour${duration > 1 ? 's' : ''}`,
-    price: `₱${calcPrice(duration).toLocaleString()}`,
+    price: `₱${priceFor(duration).toLocaleString('en-PH')}`,
     name: [formData.firstName, formData.lastName].filter(Boolean).join(' ') || '—',
     phone: formData.phone || '—',
   }
@@ -507,6 +522,7 @@ export default function BookingFlow() {
                     </div>
                   )}
                   <SectionTitle>Select a Date</SectionTitle>
+                  {now ? (
                   <Calendar
                     year={calYear}
                     month={calMonth}
@@ -520,6 +536,9 @@ export default function BookingFlow() {
                     onNext={nextMonth}
                     onPickDate={handlePickDate}
                   />
+                  ) : (
+                    <div className="h-[320px] rounded-xl bg-stone-50 animate-pulse" aria-hidden />
+                  )}
 
                   <Divider />
 
@@ -542,6 +561,7 @@ export default function BookingFlow() {
                     hStart={H_START}
                     hEnd={H_END}
                     today={todayStr}
+                    nowHour={now?.hour ?? 0}
                     onToggleSlot={handleToggleSlot}
                   />
 

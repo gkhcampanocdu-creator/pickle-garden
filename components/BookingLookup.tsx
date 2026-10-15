@@ -3,29 +3,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Search, CalendarDays, Clock, Timer, Banknote, CheckCircle2, XCircle, Loader2, Phone, AlertTriangle } from 'lucide-react'
 
+import { h12, humanDate, normalizePhone } from '@/lib/booking-rules'
+
 interface LookupResult {
-  id: string
   ref: string
   guestName: string
   phone: string    // masked, e.g. 0917****567
   bookingDate: string
-  startHour: number
-  duration: number
+  hours: number[]  // every booked hour, ascending
   totalPrice: number
   isPaid: boolean
-}
-
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-function h12(h: number) { return `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}` }
-function normalizePhone(raw: string): string {
-  const t = raw.trim()
-  if (/^\+639\d{9}$/.test(t)) return '0' + t.slice(2)
-  return t
-}
-function humanDate(s: string) {
-  const [y, m, d] = s.split('-')
-  return `${MONTHS[+m - 1]} ${+d}, ${y}`
 }
 
 type Phase = 'idle' | 'loading' | 'found' | 'not_found' | 'cancelling' | 'cancelled' | 'cancel_error'
@@ -200,9 +187,9 @@ export default function BookingLookup({ onClose }: { onClose: () => void }) {
               <dl className="divide-y divide-stone-100 bg-stone-50 rounded-xl px-4">
                 {[
                   { Icon: CalendarDays, label: 'Date',     value: humanDate(result.bookingDate) },
-                  { Icon: Clock,        label: 'Time',     value: `${h12(result.startHour)} – ${h12(result.startHour + result.duration)}` },
-                  { Icon: Timer,        label: 'Duration', value: `${result.duration} hr${result.duration !== 1 ? 's' : ''}` },
-                  { Icon: Banknote,     label: 'Total',    value: `₱${result.totalPrice.toLocaleString()}` },
+                  { Icon: Clock,        label: 'Time',     value: result.hours.map(h12).join(' · ') },
+                  { Icon: Timer,        label: 'Duration', value: `${result.hours.length} hr${result.hours.length !== 1 ? 's' : ''}` },
+                  { Icon: Banknote,     label: 'Total',    value: `₱${result.totalPrice.toLocaleString('en-PH')}` },
                 ].map(({ Icon, label, value }) => (
                   <div key={label} className="flex items-center justify-between py-2.5">
                     <dt className="flex items-center gap-2 text-xs text-stone-500">
