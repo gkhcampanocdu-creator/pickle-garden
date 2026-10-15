@@ -1,101 +1,29 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { Resend } from 'resend'
-import { supabase } from '@/lib/supabase'
-import { supabaseServer } from '@/lib/supabase-server'
-import { buildCancellationEmail, h12, formatDate } from '@/lib/email'
-import { rateLimit, getIp } from '@/lib/rate-limit'
+import { after } from 'next/server'
+import { cancelBookingByGuest } from '@/lib/booking-service'
+import { supabaseStore } from '@/lib/supabase-store'
+import { sendCancellationEmail } from '@/lib/notifications'
+import { json, limited, readJson } from '@/lib/api'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const MESSAGES = {
+  invalid: ['Invalid booking reference or phone number.', 400],
+  not_found: ['No booking found with that reference.', 404],
+  phone_mismatch: ['Phone number does not match our records.', 403],
+  too_late: ['Cancellations must be made at least 2 hours before the booking start time.', 400],
+  error: ['Failed to cancel booking. Please try again.', 500],
+} as const
 
-export async function POST(request: NextRequest) {
-  const { ok, retryAfterSeconds } = rateLimit(getIp(request), { max: 10, windowMs: 60_000 })
-  if (!ok) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please wait a moment and try again.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } }
-    )
+export async function POST(request: Request) {
+  const tooMany = limited(request, 'cancel', 10)
+  if (tooMany) return tooMany
+
+  const body = (await readJson(request)) as { ref?: unknown; phone?: unknown } | null
+  const result = await cancelBookingByGuest(supabaseStore, body?.ref, body?.phone, Date.now())
+  if (!result.ok) {
+    const [error, status] = MESSAGES[result.error]
+    return json({ error }, status)
   }
 
-  let body: { ref?: string; phone?: string }
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 })
-  }
-
-  const { ref = '', phone = '' } = body
-  const sixChars = ref.toUpperCase().replace(/^#?PB/, '')
-
-  if (!/^[A-F0-9]{6}$/i.test(sixChars)) {
-    return NextResponse.json({ error: 'Invalid booking reference.' }, { status: 400 })
-  }
-  if (!/^09\d{9}$/.test(phone)) {
-    return NextResponse.json({ error: 'Invalid phone number format.' }, { status: 400 })
-  }
-
-  // UUID range query — same approach as lookup-booking (ILIKE unsupported on UUID type)
-  const prefix = sixChars.toLowerCase()
-  const lower = `${prefix}00-0000-0000-0000-000000000000`
-  const upper = `${prefix}ff-ffff-ffff-ffff-ffffffffffff`
-
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('id, phone, email, guest_name, booking_date, start_hour, duration')
-    .gte('id', lower)
-    .lte('id', upper)
-    .neq('status', 'cancelled')
-    .maybeSingle()
-
-  if (error) {
-    return NextResponse.json({ error: 'Lookup failed. Please try again.' }, { status: 500 })
-  }
-  if (!data) {
-    return NextResponse.json({ error: 'No booking found with that reference.' }, { status: 404 })
-  }
-
-  // Verify phone matches
-  if (data.phone !== phone) {
-    return NextResponse.json({ error: 'Phone number does not match our records.' }, { status: 403 })
-  }
-
-  // Enforce 2-hour cancellation window
-  const bookingStart = new Date(
-    `${data.booking_date}T${String(data.start_hour).padStart(2, '0')}:00:00+08:00`
-  )
-  if (Date.now() > bookingStart.getTime() - 2 * 60 * 60 * 1000) {
-    return NextResponse.json(
-      { error: 'Cancellations must be made at least 2 hours before the booking start time.' },
-      { status: 400 }
-    )
-  }
-
-  // Cancel the booking
-  const { error: cancelError } = await supabaseServer
-    .from('bookings')
-    .update({ status: 'cancelled' })
-    .eq('id', data.id)
-
-  if (cancelError) {
-    return NextResponse.json({ error: 'Failed to cancel booking. Please try again.' }, { status: 500 })
-  }
-
-  // Fire-and-forget cancellation confirmation email
-  if (data.email) {
-    const bookingRef = `#PB${(data.id as string).slice(0, 6).toUpperCase()}`
-    const html = buildCancellationEmail({
-      guestName: data.guest_name as string,
-      bookingRef,
-      date: formatDate(data.booking_date as string),
-      time: `${h12(data.start_hour as number)} – ${h12((data.start_hour as number) + (data.duration as number))}`,
-      duration: `${data.duration} hour${data.duration > 1 ? 's' : ''}`,
-    })
-    resend.emails.send({
-      from: `Pickle Garden <${process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'}>`,
-      to: data.email as string,
-      subject: `Your booking ${bookingRef} has been cancelled`,
-      html,
-    }).catch(() => {/* silent — cancellation already succeeded */})
-  }
-
-  return NextResponse.json({ ok: true })
+  const cancelled = result.data
+  after(() => sendCancellationEmail(cancelled))
+  return json({ ok: true })
 }

@@ -1,11 +1,20 @@
-import { createClient } from '@supabase/supabase-js'
+import 'server-only'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-// Server-only client. Uses the service role key to bypass RLS for admin operations.
-// Falls back to the anon key if SUPABASE_SERVICE_ROLE_KEY is not configured.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+let client: SupabaseClient | null = null
 
-export const supabaseServer = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false },
-})
+/**
+ * Server-only Supabase client using the service-role key. It bypasses RLS, so every
+ * caller must validate input and check authorization itself. There is deliberately
+ * no fallback to the public anon key: a missing key is a configuration error.
+ */
+export function getServiceClient() {
+  if (client) return client
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  }
+  client = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  return client
+}

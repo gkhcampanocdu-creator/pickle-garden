@@ -8,8 +8,24 @@ export interface ConfirmationEmailData {
   gcashRef: string
 }
 
+/** Escapes text for safe interpolation into HTML. Every guest-supplied value goes through this. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function escapeAll<T extends object>(data: T): T {
+  return Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? escapeHtml(v) : v]),
+  ) as T
+}
+
 export function buildConfirmationEmail(data: ConfirmationEmailData): string {
-  const { guestName, bookingRef, date, time, duration, price, gcashRef } = data
+  const { guestName, bookingRef, date, time, duration, price, gcashRef } = escapeAll(data)
   const firstName = guestName.split(' ')[0]
 
   return `<!DOCTYPE html>
@@ -152,7 +168,7 @@ export interface CancellationEmailData {
 }
 
 export function buildCancellationEmail(data: CancellationEmailData): string {
-  const { guestName, bookingRef, date, time, duration } = data
+  const { guestName, bookingRef, date, time, duration } = escapeAll(data)
   const firstName = guestName.split(' ')[0]
 
   return `<!DOCTYPE html>
