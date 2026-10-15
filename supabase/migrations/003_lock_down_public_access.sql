@@ -22,7 +22,18 @@ end $$;
 
 revoke all on public.bookings from anon, authenticated;
 
--- The old browser-callable booking function trusted the price sent by the browser
-drop function if exists public.create_booking(text, text, text, date, integer, integer, numeric, text);
+-- The old browser-callable booking function trusted the price sent by the browser.
+-- Drop every version of it, whatever its parameter types.
+do $$
+declare f record;
+begin
+  for f in
+    select p.oid::regprocedure as signature
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_booking'
+  loop
+    execute format('drop function %s', f.signature);
+  end loop;
+end $$;
 
 commit;

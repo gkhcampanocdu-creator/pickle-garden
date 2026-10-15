@@ -10,7 +10,7 @@ const M002 = sql('002_secure_booking.sql')
 const M003 = sql('003_lock_down_public_access.sql')
 
 /** Approximation of production today: Supabase roles, the table, migration 001, and the AUDIT_REPORT policies. */
-const PRODUCTION_TODAY = `
+const productionToday = ({ hourType = 'int', emailNull = 'null' } = {}) => `
   create role anon nologin;
   create role authenticated nologin;
   create role service_role nologin bypassrls;
@@ -18,10 +18,10 @@ const PRODUCTION_TODAY = `
     id uuid primary key default gen_random_uuid(),
     guest_name text not null,
     phone text not null,
-    email text,
+    email text ${emailNull},
     booking_date date not null,
-    start_hour int not null,
-    duration int not null default 1,
+    start_hour ${hourType} not null,
+    duration ${hourType} not null default 1,
     total_price numeric not null,
     gcash_ref text not null,
     is_paid boolean not null default false,
@@ -34,9 +34,9 @@ const PRODUCTION_TODAY = `
   create policy "Allow public availability read" on public.bookings for select to anon using (status != 'cancelled');
 `
 
-async function freshDb(seed = '') {
+async function freshDb(seed = '', schema: { hourType?: string; emailNull?: string } = {}) {
   const db = await PGlite.create({ extensions: { btree_gist } })
-  await db.exec(PRODUCTION_TODAY)
+  await db.exec(productionToday(schema))
   await db.exec(M001)
   if (seed) await db.exec(seed)
   return db
@@ -183,5 +183,50 @@ describe('003_lock_down_public_access (run after the new code is live)', () => {
   it('leaves the server (service_role) fully working', async () => {
     await expect(as(db, 'service_role', () => bookGroup(db, '2026-11-14', [9, 10], '9000000000004'))).resolves.toBeDefined()
     expect(await as(db, 'service_role', () => count(db))).toBe(3)
+  })
+})
+
+describe('002 on production data and schemas we cannot see', () => {
+  it('still lets the admin mark paid and cancel legacy rows that break the current rules', async () => {
+    const db = await freshDb(`
+      insert into bookings (guest_name, phone, booking_date, start_hour, duration, total_price, gcash_ref) values
+        ('Legacy', '039171234567', '2026-11-20', 18, 5, 1500, 'CASH');`)
+    await db.exec(M002)
+    await expect(db.exec(`update bookings set is_paid = true where guest_name = 'Legacy'`)).resolves.toBeDefined()
+    await expect(db.exec(`update bookings set status = 'cancelled' where guest_name = 'Legacy'`)).resolves.toBeDefined()
+  })
+
+  it('books guests without an email when the email column is NOT NULL', async () => {
+    const db = await freshDb('', { emailNull: "not null default ''" })
+    await db.exec(M002)
+    await expect(as(db, 'service_role', () => bookGroup(db, '2026-11-21', [9], '9100000000001'))).resolves.toBeDefined()
+  })
+
+  it('applies when hour columns are bigint or smallint', async () => {
+    for (const hourType of ['bigint', 'smallint']) {
+      const db = await freshDb('', { hourType })
+      await expect(db.exec(M002)).resolves.toBeDefined()
+      const c = await db.query(`select 1 from pg_constraint where conname = 'bookings_no_overlap'`)
+      expect(c.rows).toHaveLength(1)
+    }
+  })
+
+  it('reports at the end whether the overlap rule is active', async () => {
+    const db = await freshDb()
+    const results = await db.exec(M002)
+    expect(results.at(-1)?.rows).toEqual([{ overlap_rule_active: true }])
+  })
+})
+
+describe('003 with an unexpected create_booking signature', () => {
+  it('drops every overload of the old public booking function', async () => {
+    const db = await freshDb(`
+      create function public.create_booking(p_guest_name text, p_booking_date date) returns uuid
+      language sql security definer as 'select gen_random_uuid()';
+      grant execute on function public.create_booking(text, date) to anon;`)
+    await db.exec(M002)
+    await db.exec(M003)
+    const left = await db.query(`select 1 from pg_proc where proname = 'create_booking'`)
+    expect(left.rows).toHaveLength(0)
   })
 })

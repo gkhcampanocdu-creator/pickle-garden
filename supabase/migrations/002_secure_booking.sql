@@ -8,7 +8,6 @@
 --   * create_booking_group(): books all of a guest's hours in one transaction
 --     (all or nothing), re-checks the rules, and blocks reused GCash refs.
 --     Only the app's server (service_role) may call it.
---   * Database rules for new rows (hours, phone, GCash ref format).
 --   * A database-level guarantee that live bookings never overlap. If your
 --     existing data already contains overlaps, this one rule is skipped and a
 --     WARNING tells you which date to clean up; everything else still applies.
@@ -71,7 +70,7 @@ begin
 
   for i in 1 .. v_n loop
     insert into bookings (guest_name, phone, email, booking_date, start_hour, duration, total_price, gcash_ref)
-    values (p_guest_name, p_phone, nullif(p_email, ''), p_booking_date, p_hours[i], 1, p_prices[i], p_gcash_ref)
+    values (p_guest_name, p_phone, coalesce(p_email, ''), p_booking_date, p_hours[i], 1, p_prices[i], p_gcash_ref)
     returning id into v_id;
     v_ids := v_ids || v_id;
   end loop;
@@ -83,18 +82,12 @@ $$;
 revoke all on function public.create_booking_group(text, text, text, date, int[], numeric[], text) from public, anon, authenticated;
 grant execute on function public.create_booking_group(text, text, text, date, int[], numeric[], text) to service_role;
 
--- ── Rules for new and changed rows (existing rows are left as they are) ──────
+-- Format rules (hours, phone, GCash ref) are enforced inside create_booking_group()
+-- rather than as table CHECKs, so the admin can still mark paid or cancel older
+-- rows, and rows you add by hand in the Table Editor (e.g. walk-ins) still work.
 alter table public.bookings drop constraint if exists bookings_hours_check;
-alter table public.bookings add constraint bookings_hours_check
-  check (start_hour >= 8 and start_hour + duration <= 22 and duration between 1 and 4) not valid;
-
 alter table public.bookings drop constraint if exists bookings_phone_check;
-alter table public.bookings add constraint bookings_phone_check
-  check (phone ~ '^09[0-9]{9}$') not valid;
-
 alter table public.bookings drop constraint if exists bookings_gcash_ref_check;
-alter table public.bookings add constraint bookings_gcash_ref_check
-  check (gcash_ref ~ '^[0-9]{13}$') not valid;
 
 -- ── Live bookings may never overlap ──────────────────────────────────────────
 do $$
@@ -109,7 +102,8 @@ begin
   join public.bookings b
     on a.booking_date = b.booking_date and a.id < b.id
    and a.status is distinct from 'cancelled' and b.status is distinct from 'cancelled'
-   and int4range(a.start_hour, a.start_hour + a.duration) && int4range(b.start_hour, b.start_hour + b.duration)
+   and int4range(a.start_hour::int, (a.start_hour + a.duration)::int)
+    && int4range(b.start_hour::int, (b.start_hour + b.duration)::int)
   limit 1;
 
   if found then
@@ -118,8 +112,11 @@ begin
   end if;
 
   alter table public.bookings add constraint bookings_no_overlap
-    exclude using gist (booking_date with =, int4range(start_hour, start_hour + duration) with &&)
+    exclude using gist (booking_date with =, int4range(start_hour::int, (start_hour + duration)::int) with &&)
     where (status is distinct from 'cancelled');
 end $$;
 
 commit;
+
+-- Result shown in the SQL editor: true means double-bookings are now impossible at the database level.
+select exists (select 1 from pg_constraint where conname = 'bookings_no_overlap') as overlap_rule_active;
