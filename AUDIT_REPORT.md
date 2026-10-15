@@ -10,7 +10,8 @@
 | Variable | Location | Status |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | `.env.local` only | ✅ Safe |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `.env.local` only | ✅ Safe |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | no longer used (2026-10-16) — remove it | — |
+| `ADMIN_SESSION_SECRET` | server-side only — signs the admin session cookie | ✅ Safe |
 | `SUPABASE_SERVICE_ROLE_KEY` | `.env.local` only — server-side only | ✅ Safe |
 | `ADMIN_PASSWORD` | `.env.local` only — never exposed to client | ✅ Safe |
 | `RESEND_API_KEY` | `.env.local` only — server-side only | ✅ Safe |
@@ -24,29 +25,16 @@
 
 ## 2. Supabase RLS Recommendations
 
-The booking submission (`lib/bookings.ts`) uses the **anonymous key** directly from the browser, so Supabase Row Level Security is the primary data protection layer. The following policies must be enabled in your Supabase dashboard:
-
-```sql
--- Enable RLS on the bookings table
-ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
-
--- Anyone (anon) can INSERT a new booking
-CREATE POLICY "Allow public bookings insert"
-  ON bookings FOR INSERT
-  TO anon
-  WITH CHECK (true);
-
--- Anyone can read non-cancelled bookings (needed for availability check)
-CREATE POLICY "Allow public availability read"
-  ON bookings FOR SELECT
-  TO anon
-  USING (status != 'cancelled');
-
--- Nobody can UPDATE or DELETE via the anon key
--- (updates go through service-role key in API routes only)
-```
-
-**Action required:** Verify these policies are active in the Supabase Dashboard → Authentication → Policies. The service-role key (used in API routes) bypasses RLS by design.
+> **Superseded (2026-10-16).** The policies previously recommended here were unsafe:
+> an `anon` SELECT policy exposes *every column* of every live booking (names, phone
+> numbers, emails, GCash references) to anyone holding the public anon key, which is
+> embedded in the site's JavaScript. An `anon` INSERT policy let anyone write bookings
+> with any price or time.
+>
+> The site no longer uses the anon key at all. All reads and writes go through the
+> app's own API routes using the server-only service-role key, and
+> `supabase/migrations/003_lock_down_public_access.sql` removes every policy and all
+> `anon`/`authenticated` access to `bookings`. See the README's "Security rollout".
 
 ---
 
